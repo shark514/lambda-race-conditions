@@ -1,86 +1,57 @@
-# Lambda Race Conditions — Démonstration Massive
+# Lambda Race Conditions — Démonstration
 
-## Le problème
-
-**Les lambdas Java ne protègent pas contre les race conditions.** `replaceAll`, `forEach`, `removeIf`, `sort`, `stream`… toutes ces API "modernes" de Java 8+ opèrent directement sur la collection sous-jacente. Si cette collection est un `ArrayList` partagé entre threads, ça casse.
-
-Ce projet le prouve avec **10 scénarios** testés à **5 niveaux de charge** (100 → 1M hits), mesurant les exceptions et corruptions de données à chaque palier.
-
-## Structure
-
-```
-src/test/java/com/epns/lambda/
-├── unsafe/                              ❌ Ce qui casse
-│   ├── README.md
-│   ├── ReplaceAllUnsafeTest.java        replaceAll sur ArrayList partagée
-│   ├── ForEachAddUnsafeTest.java        forEach + add concurrent
-│   ├── RemoveIfUnsafeTest.java          removeIf + addAll concurrent
-│   ├── SortUnsafeTest.java              sort + set concurrent
-│   ├── FinalStillUnsafeTest.java        final ≠ thread-safe
-│   └── StreamSharedSourceUnsafeTest.java stream sur source mutée
-├── safe/                                ✅ Ce qui marche
-│   ├── README.md
-│   ├── CopyOnWriteArrayListTest.java    Copie à chaque écriture
-│   ├── SynchronizedListTest.java        synchronizedList + synchronized
-│   ├── SynchronizedBlockTest.java       Lock manuel
-│   └── DefensiveCopyTest.java           Snapshot avant stream
-└── util/
-    └── CollisionTestRunner.java         Helper partagé (multi-scale, -Dhits)
-```
-
-## 📊 Tableau Récapitulatif — Tous les résultats
-
-### ❌ UNSAFE
-
-| Test | 100 hits | 1,000 hits | 10,000 hits | 100,000 hits | 1,000,000 hits |
-|------|----------|------------|-------------|--------------|----------------|
-| **replaceAll** | 100.00% | 100.00% | 100.00% | 100.00% | 100.00% |
-| **forEach + add** | 2.00% | 0.20% | 0.28% | 3.70% | 39.52% |
-| **removeIf + addAll** | 0.00% | 0.50% | 98.30% | 99.93% | 99.97% |
-| **sort + set** | 11.00% | 8.60% | 20.26% | 39.66% | 53.66% |
-| **final ArrayList** | 100.00% | 100.00% | 100.00% | 100.00% | 100.00% |
-| **stream sur source mutée** | 2.00% | 0.80% | 1.16% | 2.47% | 2.85% |
-
-### ✅ SAFE
-
-| Test | 100 hits | 1,000 hits | 10,000 hits | 100,000 hits | 1,000,000 hits |
-|------|----------|------------|-------------|--------------|----------------|
-| **CopyOnWriteArrayList** | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% |
-| **synchronizedList** | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% |
-| **synchronized block** | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% |
-| **Copie défensive** | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% |
-
-## 🔑 Observations
-
-1. **`replaceAll` et `final`** : 100% de collision à TOUS les niveaux, même 100 hits
-2. **`removeIf`** : 0% à 100 hits → 99.97% à 1M — **invisible en dev, catastrophique en prod**
-3. **`forEach + add`** : croissance progressive de 2% à 40% — le bug qui empire sous la charge
-4. **Toutes les solutions SAFE** : 0.00% absolu à tous les niveaux — la synchronisation est non-négociable
+Ce projet démontre les **race conditions** qui surviennent lorsque plusieurs threads manipulent une `ArrayList` en parallèle, en comparant 6 approches différentes : boucle for classique, `replaceAll` avec lambda, variable `final`, copie défensive, `synchronizedList`, et `CopyOnWriteArrayList`. Chaque scénario exécute exactement la même opération (incrémenter tous les éléments) avec 50 threads concurrents, seule la méthode de synchronisation change.
 
 ## Lancer les tests
 
 ```bash
-# Tous les tests (5 niveaux de charge chacun)
-mvn test
+# Tous les scénarios
+mvn test -Dtest="com.epns.lambda.scenarios.*"
 
-# Un scénario spécifique
-mvn test -Dtest=ReplaceAllUnsafeTest
-
-# Avec un nombre de hits personnalisé
-mvn test -Dtest=SortUnsafeTest -Dhits=500000
-
-# Tous les unsafe
-mvn test -Dtest="com.epns.lambda.unsafe.*"
-
-# Tous les safe
-mvn test -Dtest="com.epns.lambda.safe.*"
+# Un scénario individuel
+mvn test -Dtest=com.epns.lambda.scenarios.BaselineForLoopTest
 ```
 
-Le paramètre `-Dhits=N` permet de choisir un seul niveau de charge au lieu des 5 par défaut.
+## Résultats consolidés
 
-## Stack
+| Scénario               | 100 hits | 1 000 hits | 10 000 hits | 100 000 hits |
+|------------------------|----------|------------|-------------|--------------|
+| BaselineForLoop        | X.XX%    | X.XX%      | X.XX%       | X.XX%        |
+| ReplaceAllUnsafe       | X.XX%    | X.XX%      | X.XX%       | X.XX%        |
+| FinalReplaceAll        | X.XX%    | X.XX%      | X.XX%       | X.XX%        |
+| DefensiveCopy          | X.XX%    | X.XX%      | X.XX%       | X.XX%        |
+| SynchronizedList       | X.XX%    | X.XX%      | X.XX%       | X.XX%        |
+| CopyOnWriteArrayList   | X.XX%    | X.XX%      | X.XX%       | X.XX%        |
 
-- Java 21
-- JUnit 5
-- Maven
-- 10 tests × 5 niveaux = 50 scénarios
+## Les 6 scénarios
+
+### 1. BaselineForLoop
+Boucle `for` classique avec `list.get(i)` et `list.set(i, ...)`. Pas de lambda. Démontre que le problème n'est pas spécifique aux lambdas — c'est un problème de concurrence pure.
+
+### 2. ReplaceAllUnsafe
+Utilise `list.replaceAll(x -> x + 1)` directement sur une `ArrayList` partagée. ConcurrentModificationException garantie à haute charge car `replaceAll` vérifie le `modCount`.
+
+### 3. FinalReplaceAll
+Même chose que ReplaceAllUnsafe, mais avec `final ArrayList<Integer>`. Démontre que `final` protège la **référence**, pas le **contenu** — les race conditions sont identiques.
+
+### 4. DefensiveCopy
+Crée une copie `new ArrayList<>(list)`, transforme la copie, puis écrase l'original avec `Collections.copy()`. Réduit les exceptions mais introduit des pertes de mises à jour (lost updates).
+
+### 5. SynchronizedList
+`Collections.synchronizedList()` + bloc `synchronized(list)` autour de `replaceAll`. **Thread-safe** : chaque opération est atomique grâce au verrou explicite.
+
+### 6. CopyOnWriteArrayList
+`CopyOnWriteArrayList` avec `replaceAll`. **Thread-safe** grâce au verrouillage interne sur chaque mutation. Plus lent à haute charge mais correcte.
+
+## Conclusion
+
+| Approche | Safe ? | Pourquoi |
+|----------|--------|----------|
+| for loop | ❌ | Aucune synchronisation, read-modify-write non atomique |
+| replaceAll | ❌ | ConcurrentModificationException (modCount check) |
+| final + replaceAll | ❌ | `final` = référence immuable, pas contenu |
+| Copie défensive | ⚠️ | Pas d'exception, mais lost updates possibles |
+| synchronizedList + sync block | ✅ | Verrou explicite rend l'opération atomique |
+| CopyOnWriteArrayList | ✅ | Verrouillage interne, copie à chaque écriture |
+
+**Règle d'or :** Si plusieurs threads modifient une collection, il faut soit un verrou explicite (`synchronized`), soit une structure concurrent (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Ni `final`, ni les copies défensives ne suffisent.
