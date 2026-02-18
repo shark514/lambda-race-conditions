@@ -1,40 +1,40 @@
-# ✅ Tests SAFE — Les solutions qui marchent
+# ✅ SAFE Tests — Solutions That Work
 
-Ces tests prouvent que les solutions de synchronisation fonctionnent : **0% de collision à tous les niveaux de charge**.
+These tests prove that synchronization solutions work: **0% collision at all load levels**.
 
 ## Solutions
 
-| Test | Solution | Comment ça marche | Quand l'utiliser |
-|------|----------|-------------------|------------------|
-| `CopyOnWriteArrayListTest` | `CopyOnWriteArrayList` | Copie l'array à chaque écriture | Lectures fréquentes, écritures rares |
-| `SynchronizedListTest` | `Collections.synchronizedList` | Verrou mutex + `synchronized(shared)` | Drop-in replacement rapide |
-| `SynchronizedBlockTest` | `synchronized` block manuel | Exclusion mutuelle avec lock dédié | Contrôle total |
-| `DefensiveCopyTest` | Copie défensive | Snapshot isolé avant stream | Stream/itération longue |
+| Test | Solution | How it works | When to use |
+|------|----------|-------------|-------------|
+| `CopyOnWriteArrayListTest` | `CopyOnWriteArrayList` | Copies the array on every write | Frequent reads, rare writes |
+| `SynchronizedListTest` | `Collections.synchronizedList` | Mutex lock + `synchronized(shared)` | Quick drop-in replacement |
+| `SynchronizedBlockTest` | Manual `synchronized` block | Mutual exclusion with dedicated lock | Total control |
+| `DefensiveCopyTest` | Defensive copy | Isolated snapshot before stream | Long stream/iteration |
 
-## Comment lancer
+## How to run
 
-Tous les tests safe :
+All safe tests:
 ```bash
 mvn test -pl . -Dtest="com.epns.lambda.safe.*"
 ```
 
-Un test spécifique avec un niveau de charge :
+A specific test with a load level:
 ```bash
 mvn test -Dtest=CopyOnWriteArrayListTest -Dhits=100000
 ```
 
-## Quelle solution choisir ?
+## Which solution to choose?
 
 ```
-Lectures fréquentes, écritures rares ?  → CopyOnWriteArrayList
-Drop-in replacement rapide ?            → Collections.synchronizedList + synchronized
-Contrôle total ?                        → synchronized block manuel
-Stream/itération longue ?               → Copie défensive
-Haute performance ?                     → ConcurrentHashMap (pas couvert ici)
+Frequent reads, rare writes?     → CopyOnWriteArrayList
+Quick drop-in replacement?       → Collections.synchronizedList + synchronized
+Total control?                   → Manual synchronized block
+Long stream/iteration?           → Defensive copy
+High performance?                → ConcurrentHashMap (not covered here)
 ```
 
-## ⚠️ Pièges courants
+## ⚠️ Common pitfalls
 
-- `synchronizedList` **seul** ne suffit PAS pour `replaceAll`/`forEach`/`sort` — il faut un bloc `synchronized(list)` autour
-- `CopyOnWriteArrayList` est catastrophique si les écritures sont fréquentes (copie O(n) à chaque mutation)
-- La copie défensive doit elle-même être synchronisée (sinon on copie un état incohérent)
+- `synchronizedList` **alone** is NOT enough for `replaceAll`/`forEach`/`sort` — you need a `synchronized(list)` block around it
+- `CopyOnWriteArrayList` is catastrophic if writes are frequent (O(n) copy on each mutation)
+- The defensive copy itself must be synchronized (otherwise you copy an inconsistent state)

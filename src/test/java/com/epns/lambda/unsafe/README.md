@@ -1,42 +1,42 @@
-# ❌ Tests UNSAFE — Ce qui casse
+# ❌ UNSAFE Tests — What Breaks
 
-Ces tests prouvent que `ArrayList` n'est **PAS thread-safe**, même avec des lambdas "modernes" de Java 8+.
+These tests prove that `ArrayList` is **NOT thread-safe**, even with "modern" Java 8+ lambdas.
 
-## Scénarios
+## Scenarios
 
-| Test | Opération | Pourquoi ça casse |
-|------|-----------|-------------------|
-| `ReplaceAllUnsafeTest` | `replaceAll(x -> x + 1)` | Itération + modification concurrente sur tous les éléments |
-| `ForEachAddUnsafeTest` | `forEach()` + `add()` | Modification pendant itération → ConcurrentModificationException |
-| `RemoveIfUnsafeTest` | `removeIf()` + `addAll()` | Restructuration concurrente de l'array interne |
-| `SortUnsafeTest` | `sort()` + `set()` | Tri concurrent = corruption silencieuse |
+| Test | Operation | Why it breaks |
+|------|-----------|---------------|
+| `ReplaceAllUnsafeTest` | `replaceAll(x -> x + 1)` | Concurrent iteration + modification on all elements |
+| `ForEachAddUnsafeTest` | `forEach()` + `add()` | Modification during iteration → ConcurrentModificationException |
+| `RemoveIfUnsafeTest` | `removeIf()` + `addAll()` | Concurrent restructuring of the internal array |
+| `SortUnsafeTest` | `sort()` + `set()` | Concurrent sort = silent corruption |
 | `FinalStillUnsafeTest` | `final ArrayList` + `replaceAll()` | `final` ≠ immutable ≠ thread-safe |
-| `StreamSharedSourceUnsafeTest` | `stream().map().collect()` + mutation | Stream lit la source en direct, pas une copie |
+| `StreamSharedSourceUnsafeTest` | `stream().map().collect()` + mutation | Stream reads the source directly, not a copy |
 
-## Comment lancer
+## How to run
 
-Tous les tests unsafe :
+All unsafe tests:
 ```bash
 mvn test -pl . -Dtest="com.epns.lambda.unsafe.*"
 ```
 
-Un test spécifique :
+A specific test:
 ```bash
 mvn test -Dtest=ReplaceAllUnsafeTest
 ```
 
-Avec un niveau de charge spécifique :
+With a specific load level:
 ```bash
 mvn test -Dtest=ReplaceAllUnsafeTest -Dhits=1000000
 ```
 
-## Ce qu'on observe
+## What we observe
 
-- **À 100 hits** : certains tests montrent déjà des collisions (replaceAll : 100%), d'autres semblent safe (removeIf : 0%)
-- **À 1M hits** : TOUS les tests unsafe montrent des collisions significatives
-- **Leçon** : un test unitaire classique (quelques appels) ne voit pas les race conditions. Il faut de la charge.
+- **At 100 hits**: some tests already show collisions (replaceAll: 100%), others appear safe (removeIf: 0%)
+- **At 1M hits**: ALL unsafe tests show significant collisions
+- **Lesson**: a standard unit test (a few calls) won't detect race conditions. You need load.
 
-## Types d'erreurs détectées
+## Types of errors detected
 
-1. **Exceptions** : `ConcurrentModificationException`, `ArrayIndexOutOfBoundsException`, `NullPointerException`
-2. **Corruptions** : données incohérentes sans exception (le pire cas — silencieux en prod)
+1. **Exceptions**: `ConcurrentModificationException`, `ArrayIndexOutOfBoundsException`, `NullPointerException`
+2. **Corruptions**: inconsistent data without exceptions (the worst case — silent in production)

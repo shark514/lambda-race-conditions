@@ -11,13 +11,13 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * stream().map().collect() sur une source modifiée concurremment.
+ * stream().map().collect() on a source modified concurrently.
  * 
- * Les streams Java sont LAZY — ils ne copient pas la source. stream() crée
- * un pipeline qui lit directement depuis l'ArrayList sous-jacente. Si un autre
- * thread modifie cette liste pendant que le stream la parcourt, on obtient des
- * ConcurrentModificationException, ArrayIndexOutOfBoundsException, des null
- * dans le résultat, ou un résultat de taille incohérente.
+ * Java streams are LAZY — they don't copy the source. stream() creates
+ * a pipeline that reads directly from the underlying ArrayList. If another
+ * thread modifies this list while the stream traverses it, you get
+ * ConcurrentModificationException, ArrayIndexOutOfBoundsException, nulls
+ * in the result, or a result of inconsistent size.
  */
 @DisplayName("stream on shared source — UNSAFE")
 public class StreamSharedSourceUnsafeTest {

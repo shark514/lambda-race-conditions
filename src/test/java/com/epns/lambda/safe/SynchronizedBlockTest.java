@@ -9,14 +9,13 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * synchronized block manuel avec un objet lock dédié.
- * Le verrou garantit l'exclusion mutuelle : un seul thread à la fois.
+ * Manual synchronized block with a dedicated lock object.
+ * The lock guarantees mutual exclusion: only one thread at a time.
  * 
- * Avantages : contrôle total sur la granularité, peut protéger plusieurs
- * opérations atomiquement.
- * Inconvénients : verbeux, si on oublie un synchronized quelque part → unsafe.
+ * Pros: total control over granularity, can protect multiple operations atomically.
+ * Cons: verbose, if you forget a synchronized somewhere → unsafe.
  * 
- * Quand l'utiliser : quand on veut un contrôle fin et qu'on est discipliné.
+ * When to use: when you want fine-grained control and are disciplined.
  */
 @DisplayName("replaceAll with synchronized block — SAFE")
 public class SynchronizedBlockTest {

@@ -7,10 +7,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 /**
- * Helper partagé pour exécuter des tests de collision à différents niveaux de charge.
+ * Shared helper to run collision tests at different load levels.
  * 
- * Le nombre de hits peut être contrôlé via -Dhits=N pour un seul niveau,
- * ou laissé par défaut pour exécuter les 5 niveaux (100, 1K, 10K, 100K, 1M).
+ * The number of hits can be controlled via -Dhits=N for a single level,
+ * or left at default to run all 5 levels (100, 1K, 10K, 100K, 1M).
  */
 public final class CollisionTestRunner {
 

@@ -9,14 +9,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CopyOnWriteArrayList crée une COPIE de l'array interne à chaque modification.
- * Chaque replaceAll travaille sur sa propre copie. Les lectures ne sont jamais
- * bloquées et ne voient jamais un état intermédiaire.
+ * CopyOnWriteArrayList creates a COPY of the internal array on each modification.
+ * Each replaceAll works on its own copy. Reads are never blocked and never
+ * see an intermediate state.
  * 
- * Avantages : aucune synchronisation manuelle, lectures très rapides.
- * Inconvénients : chaque écriture copie l'array entier → O(n) par modification.
+ * Advantages: no manual synchronization, very fast reads.
+ * Disadvantages: each write copies the entire array → O(n) per modification.
  * 
- * Quand l'utiliser : lectures fréquentes, écritures rares (listeners, config).
+ * When to use: frequent reads, rare writes (listeners, config).
  */
 @DisplayName("replaceAll on CopyOnWriteArrayList — SAFE")
 public class CopyOnWriteArrayListTest {

@@ -9,14 +9,14 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Collections.synchronizedList wrappe chaque méthode dans un synchronized.
- * Mais pour les opérations composées (itération, replaceAll), il faut
- * SYNCHRONISER MANUELLEMENT sur la liste. synchronized(shared) garantit
- * qu'un seul thread exécute replaceAll à la fois.
+ * Collections.synchronizedList wraps each method in a synchronized block.
+ * But for compound operations (iteration, replaceAll), you must
+ * MANUALLY SYNCHRONIZE on the list. synchronized(shared) ensures
+ * only one thread executes replaceAll at a time.
  * 
- * Attention : synchronizedList SEUL ne suffit PAS pour replaceAll/forEach/sort !
+ * Warning: synchronizedList ALONE is NOT enough for replaceAll/forEach/sort!
  * 
- * Quand l'utiliser : drop-in replacement rapide quand on contrôle tous les accès.
+ * When to use: quick drop-in replacement when you control all access points.
  */
 @DisplayName("replaceAll on synchronizedList — SAFE")
 public class SynchronizedListTest {

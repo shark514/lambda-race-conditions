@@ -10,12 +10,12 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * replaceAll() sur une ArrayList partagée entre threads.
+ * replaceAll() on an ArrayList shared between threads.
  * 
- * replaceAll itère sur chaque élément et le remplace. Pendant cette itération,
- * un autre thread fait la même chose. Java détecte parfois la modification
- * concurrente via modCount (ConcurrentModificationException), mais quand deux
- * threads modifient modCount en même temps, la détection saute — corruption silencieuse.
+ * replaceAll iterates over each element and replaces it. During this iteration,
+ * another thread does the same thing. Java sometimes detects the concurrent
+ * modification via modCount (ConcurrentModificationException), but when two
+ * threads modify modCount simultaneously, detection fails — silent corruption.
  */
 @DisplayName("replaceAll on shared ArrayList — UNSAFE")
 public class ReplaceAllUnsafeTest {

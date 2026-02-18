@@ -10,13 +10,13 @@ import java.util.concurrent.ThreadLocalRandom;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * sort() avec Comparator lambda + set() concurrents.
+ * sort() with Comparator lambda + concurrent set().
  * 
- * sort réorganise physiquement les éléments dans l'array interne (O(n log n)
- * comparaisons et swaps). Pendant ce tri, un autre thread modifie un élément
- * ou lance son propre sort. Résultat : éléments dupliqués, perdus, ou ordre
- * incohérent. La corruption est SILENCIEUSE — pas d'exception, juste des
- * données fausses.
+ * sort physically rearranges elements in the internal array (O(n log n)
+ * comparisons and swaps). During this sort, another thread modifies an element
+ * or launches its own sort. Result: duplicated elements, lost elements, or
+ * inconsistent ordering. The corruption is SILENT — no exception, just
+ * wrong data.
  */
 @DisplayName("sort with comparator lambda — UNSAFE")
 public class SortUnsafeTest {

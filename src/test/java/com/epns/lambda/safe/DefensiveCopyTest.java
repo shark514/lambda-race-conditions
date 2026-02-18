@@ -11,13 +11,13 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Copie défensive avant stream : on prend un synchronized sur la liste,
- * on fait new ArrayList<>(shared), puis on stream la copie librement.
+ * Defensive copy before stream: we take a synchronized lock on the list,
+ * make a new ArrayList<>(shared), then stream the copy freely.
  * 
- * La copie crée un snapshot isolé. Peu importe ce que les autres threads
- * font après — notre copie ne bouge plus. Le stream travaille sur des données figées.
+ * The copy creates an isolated snapshot. No matter what other threads do
+ * afterwards — our copy doesn't change. The stream works on frozen data.
  * 
- * Quand l'utiliser : quand on doit streamer/itérer longuement sans bloquer les écritures.
+ * When to use: when you need to stream/iterate at length without blocking writes.
  */
 @DisplayName("stream with defensive copy — SAFE")
 public class DefensiveCopyTest {
