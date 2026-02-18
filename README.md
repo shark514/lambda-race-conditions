@@ -50,6 +50,58 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | SynchronizedList       | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 | CopyOnWriteArrayList   | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 
+### Detailed results per scenario
+
+#### BaselineForLoop
+| Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|------|------------|-------------|----------|-----------------|
+| 100     | 100     | 0    | 0          | 100         | 100      | 0               |
+| 1,000   | 1,000   | 0    | 0          | 931         | 1,000    | 69              |
+| 10,000  | 9,999   | 1    | 0          | 9,262       | 10,000   | 738             |
+| 100,000 | 99,823  | 177  | 0          | 92,807      | 100,000  | **7,193**       |
+
+#### ReplaceAllUnsafe
+| Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|------|------------|-------------|----------|-----------------|
+| 100     | 97      | 0    | 3          | 99          | 100      | 1               |
+| 1,000   | 987     | 0    | 13         | 993         | 1,000    | 7               |
+| 10,000  | 9,987   | 0    | 13         | 9,994       | 10,000   | 6               |
+| 100,000 | 90,956  | 137  | 8,907      | 88,132      | 100,000  | **11,868**      |
+
+#### FinalReplaceAll
+| Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|------|------------|-------------|----------|-----------------|
+| 100     | 98      | 0    | 2          | 98          | 100      | 2               |
+| 1,000   | 991     | 0    | 9          | 978         | 1,000    | 22              |
+| 10,000  | 9,983   | 0    | 17         | 9,987       | 10,000   | 13              |
+| 100,000 | 87,987  | 87   | 11,926     | 84,781      | 100,000  | **15,219**      |
+
+#### DefensiveCopy
+| Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|------|------------|-------------|----------|-----------------|
+| 100     | 100     | 0    | 0          | 80          | 100      | 20              |
+| 1,000   | 999     | 1    | 0          | 965         | 1,000    | 35              |
+| 10,000  | 9,982   | 18   | 0          | 9,121       | 10,000   | 879             |
+| 100,000 | 99,432  | 568  | 0          | 67,807      | 100,000  | **32,193**      |
+
+#### SynchronizedList ✅
+| Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|------|------------|-------------|----------|-----------------|
+| 100     | 100     | 0    | 0          | 100         | 100      | 0               |
+| 1,000   | 1,000   | 0    | 0          | 1,000       | 1,000    | 0               |
+| 10,000  | 10,000  | 0    | 0          | 10,000      | 10,000   | 0               |
+| 100,000 | 100,000 | 0    | 0          | 100,000     | 100,000  | **0**           |
+
+#### CopyOnWriteArrayList ✅
+| Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|------|------------|-------------|----------|-----------------|
+| 100     | 100     | 0    | 0          | 100         | 100      | 0               |
+| 1,000   | 1,000   | 0    | 0          | 1,000       | 1,000    | 0               |
+| 10,000  | 10,000  | 0    | 0          | 10,000      | 10,000   | 0               |
+| 100,000 | 100,000 | 0    | 0          | 100,000     | 100,000  | **0**           |
+
+> **Note**: Results vary depending on CPU speed. Faster machines (e.g., gaming laptops with RTX 4060) show *higher* loss rates because threads collide more frequently. Run the tests yourself to see your own numbers.
+
 ### What the results show
 
 - **BaselineForLoop**: The classic `for` loop loses >50% of increments at 100K hits. The read-modify-write (`get` → `+1` → `set`) is not atomic.
