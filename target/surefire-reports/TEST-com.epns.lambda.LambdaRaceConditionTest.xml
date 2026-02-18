@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.epns.lambda.LambdaRaceConditionTest" time="21.425" tests="10" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.epns.lambda.LambdaRaceConditionTest" time="67.135" tests="10" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -11,7 +11,7 @@
     <property name="java.vm.specification.version" value="21"/>
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="sun.boot.library.path" value="/usr/lib/jvm/java-21-openjdk-amd64/lib"/>
-    <property name="sun.java.command" value="/home/ubuntu/epns/lambda-race-conditions/target/surefire/surefirebooter-20260218195546225_3.jar /home/ubuntu/epns/lambda-race-conditions/target/surefire 2026-02-18T19-55-46_122-jvmRun1 surefire-20260218195546225_1tmp surefire_0-20260218195546225_2tmp"/>
+    <property name="sun.java.command" value="/home/ubuntu/epns/lambda-race-conditions/target/surefire/surefirebooter-20260218195923749_3.jar /home/ubuntu/epns/lambda-race-conditions/target/surefire 2026-02-18T19-59-23_653-jvmRun1 surefire-20260218195923749_1tmp surefire_0-20260218195923749_2tmp"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="/home/ubuntu/epns/lambda-race-conditions/target/test-classes:/home/ubuntu/epns/lambda-race-conditions/target/classes:/home/claudia/.m2/repository/org/junit/jupiter/junit-jupiter/5.10.2/junit-jupiter-5.10.2.jar:/home/claudia/.m2/repository/org/junit/jupiter/junit-jupiter-api/5.10.2/junit-jupiter-api-5.10.2.jar:/home/claudia/.m2/repository/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar:/home/claudia/.m2/repository/org/junit/platform/junit-platform-commons/1.10.2/junit-platform-commons-1.10.2.jar:/home/claudia/.m2/repository/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar:/home/claudia/.m2/repository/org/junit/jupiter/junit-jupiter-params/5.10.2/junit-jupiter-params-5.10.2.jar:/home/claudia/.m2/repository/org/junit/jupiter/junit-jupiter-engine/5.10.2/junit-jupiter-engine-5.10.2.jar:/home/claudia/.m2/repository/org/junit/platform/junit-platform-engine/1.10.2/junit-platform-engine-1.10.2.jar:"/>
     <property name="sun.cpu.endian" value="little"/>
@@ -26,7 +26,7 @@
     <property name="line.separator" value="&#10;"/>
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
-    <property name="surefire.real.class.path" value="/home/ubuntu/epns/lambda-race-conditions/target/surefire/surefirebooter-20260218195546225_3.jar"/>
+    <property name="surefire.real.class.path" value="/home/ubuntu/epns/lambda-race-conditions/target/surefire/surefirebooter-20260218195923749_3.jar"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="21.0.9+10-Ubuntu-125.04"/>
     <property name="user.name" value="claudia"/>
@@ -52,102 +52,102 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="65.0"/>
   </properties>
-  <testcase name="testReplaceAll_SynchronizedList" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.395">
+  <testcase name="testReplaceAll_SynchronizedList" classname="com.epns.lambda.LambdaRaceConditionTest" time="1.534">
     <system-out><![CDATA[
 === testReplaceAll_SynchronizedList ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
 Exceptions caught: 0
 Data corruptions: 0
 Collision rate: 0.00%
 Status: SAFE ✅
 ]]></system-out>
   </testcase>
-  <testcase name="testReplaceAll_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.288">
+  <testcase name="testReplaceAll_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="1.147">
     <system-out><![CDATA[
 === testReplaceAll_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
-Exceptions caught: 98,782
-Data corruptions: 1,218
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
+Exceptions caught: 965,543
+Data corruptions: 34,457
 Collision rate: 100.00%
 Status: UNSAFE ❌
 ]]></system-out>
   </testcase>
-  <testcase name="testStream_DefensiveCopy" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.156">
+  <testcase name="testStream_DefensiveCopy" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.588">
     <system-out><![CDATA[
 === testStream_DefensiveCopy ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
 Exceptions caught: 0
 Data corruptions: 0
 Collision rate: 0.00%
 Status: SAFE ✅
 ]]></system-out>
   </testcase>
-  <testcase name="testReplaceAll_Synchronized_Block" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.219">
+  <testcase name="testReplaceAll_Synchronized_Block" classname="com.epns.lambda.LambdaRaceConditionTest" time="1.011">
     <system-out><![CDATA[
 === testReplaceAll_Synchronized_Block ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
 Exceptions caught: 0
 Data corruptions: 0
 Collision rate: 0.00%
 Status: SAFE ✅
 ]]></system-out>
   </testcase>
-  <testcase name="testRemoveIf_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.097">
+  <testcase name="testRemoveIf_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.18">
     <system-out><![CDATA[
 === testRemoveIf_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
-Exceptions caught: 99,878
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
+Exceptions caught: 999,916
 Data corruptions: 2
-Collision rate: 99.88%
+Collision rate: 99.99%
 Status: UNSAFE ❌
 ]]></system-out>
   </testcase>
-  <testcase name="testForEachAdd_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="19.096">
+  <testcase name="testForEachAdd_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="60.177">
     <system-out><![CDATA[
 === testForEachAdd_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
-Exceptions caught: 10,321
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
+Exceptions caught: 31,690
 Data corruptions: 0
-Collision rate: 10.32%
-Status: UNSAFE ❌
-]]></system-out>
-  </testcase>
-  <testcase name="testSort_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.748">
-    <system-out><![CDATA[
-=== testSort_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
-Exceptions caught: 27,376
-Data corruptions: 551
-Collision rate: 27.93%
-Status: UNSAFE ❌
-]]></system-out>
-  </testcase>
-  <testcase name="testStreamCollect_SharedSource_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.081">
-    <system-out><![CDATA[
-=== testStreamCollect_SharedSource_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
-Exceptions caught: 3,147
-Data corruptions: 25
 Collision rate: 3.17%
 Status: UNSAFE ❌
 ]]></system-out>
   </testcase>
-  <testcase name="testReplaceAll_CopyOnWriteArrayList" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.055">
+  <testcase name="testSort_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.632">
+    <system-out><![CDATA[
+=== testSort_Unsafe ===
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
+Exceptions caught: 245,158
+Data corruptions: 622
+Collision rate: 24.58%
+Status: UNSAFE ❌
+]]></system-out>
+  </testcase>
+  <testcase name="testStreamCollect_SharedSource_Unsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.319">
+    <system-out><![CDATA[
+=== testStreamCollect_SharedSource_Unsafe ===
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
+Exceptions caught: 495,388
+Data corruptions: 494,474
+Collision rate: 98.99%
+Status: UNSAFE ❌
+]]></system-out>
+  </testcase>
+  <testcase name="testReplaceAll_CopyOnWriteArrayList" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.341">
     <system-out><![CDATA[
 === testReplaceAll_CopyOnWriteArrayList ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
 Exceptions caught: 0
 Data corruptions: 0
 Collision rate: 0.00%
 Status: SAFE ✅
 ]]></system-out>
   </testcase>
-  <testcase name="testFinal_StillUnsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="0.228">
+  <testcase name="testFinal_StillUnsafe" classname="com.epns.lambda.LambdaRaceConditionTest" time="1.152">
     <system-out><![CDATA[
 === testFinal_StillUnsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
-Exceptions caught: 87,375
-Data corruptions: 12,625
+Threads: 50 | Iterations: 20000 | Total hits: 1,000,000
+Exceptions caught: 916,956
+Data corruptions: 83,044
 Collision rate: 100.00%
 Status: UNSAFE ❌
 ]]></system-out>

@@ -6,11 +6,11 @@
 
 ## Comment on le prouve
 
-Chaque test lance **50 threads** qui exécutent **2,000 itérations** chacun = **100,000 opérations par test**. On compte les exceptions et les corruptions de données, puis on affiche le taux de collision. Si c'est > 0%, c'est unsafe.
+Chaque test lance **50 threads** qui exécutent **20,000 itérations** chacun = **1,000,000 opérations par test**. On compte les exceptions et les corruptions de données, puis on affiche le taux de collision. Si c'est > 0%, c'est unsafe.
 
 ```
 === testReplaceAll_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 100,000
+Threads: 50 | Iterations: 2000 | Total hits: 1,000,000
 Exceptions caught: 847
 Data corruptions: 1,203
 Collision rate: 2.05%
@@ -39,7 +39,7 @@ Status: UNSAFE ❌
 
 **Pourquoi c'est unsafe :** `forEach` utilise un itérateur interne qui vérifie `modCount` à chaque étape. Quand `add` modifie la liste pendant l'itération, le `modCount` change et l'itérateur lance une `ConcurrentModificationException`. Parfois, `add` se glisse entre deux vérifications et le résultat est une liste avec un nombre d'éléments inattendu.
 
-**Résultat attendu :** ~1-2% de collision. Le taux est plus bas que `replaceAll` parce que l'opération `add` est très rapide (un seul appel) — la fenêtre de collision est plus étroite. Mais sur 100,000 essais, on capture quand même des centaines de cas.
+**Résultat attendu :** ~3% de collision. Le taux est plus bas que `replaceAll` parce que l'opération `add` est très rapide (un seul appel) — la fenêtre de collision est plus étroite. Mais sur 1,000,000 essais, on capture quand même des centaines de cas.
 
 **Leçon :** "Je ne fais que lire avec `forEach`" ne suffit pas. Si un autre thread écrit en même temps, ça casse.
 
@@ -51,7 +51,7 @@ Status: UNSAFE ❌
 
 **Pourquoi c'est unsafe :** `removeIf` parcourt la liste, évalue le prédicat sur chaque élément, et supprime ceux qui matchent. Pendant ce temps, un autre thread ajoute des éléments. L'array interne de `ArrayList` peut être redimensionné par `addAll` pendant que `removeIf` est en train de le parcourir — ça cause des `ArrayIndexOutOfBoundsException`, des `ConcurrentModificationException`, ou des `null` dans la liste.
 
-**Résultat attendu :** ~3-5% de collision. `removeIf` + `addAll` modifient tous les deux la structure — la probabilité de conflit est élevée.
+**Résultat attendu :** ~99-100% de collision. `removeIf` + `addAll` modifient tous les deux la structure — la probabilité de conflit est élevée.
 
 **Leçon :** Les méthodes "fonctionnelles" de Java (`removeIf`, `replaceAll`) ne sont pas plus sûres que les boucles classiques. Elles utilisent le même `ArrayList` non-synchronisé en dessous.
 
@@ -91,7 +91,7 @@ final ArrayList<Integer> shared = new ArrayList<>();
 
 **Pourquoi c'est unsafe :** Les streams Java sont **lazy** — ils ne copient pas la source. `stream()` crée un pipeline qui lit directement depuis l'`ArrayList` sous-jacente. Si un autre thread modifie cette liste pendant que le stream la parcourt, on obtient des `ConcurrentModificationException`, des `ArrayIndexOutOfBoundsException`, des `null` dans le résultat, ou un résultat de taille incohérente.
 
-**Résultat attendu :** ~3-5% de collision. Le stream itère sur la liste entière, donc la fenêtre de collision est proportionnelle à la taille de la liste.
+**Résultat attendu :** ~99-100% de collision. Le stream itère sur la liste entière, donc la fenêtre de collision est proportionnelle à la taille de la liste.
 
 **Leçon :** `stream()` n'est pas une copie défensive. Il lit la source en direct. Si la source bouge, le stream casse.
 
@@ -192,11 +192,11 @@ final ArrayList<Integer> shared = new ArrayList<>();
 | # | Test | Type | Collision | Pourquoi |
 |---|------|------|-----------|----------|
 | 1 | `replaceAll` sur ArrayList | ❌ UNSAFE | ~100% | Itération + modification concurrente |
-| 2 | `forEach` + `add` | ❌ UNSAFE | ~1-2% | Modification pendant itération |
-| 3 | `removeIf` + `addAll` | ❌ UNSAFE | ~3-5% | Restructuration concurrente |
+| 2 | `forEach` + `add` | ❌ UNSAFE | ~3% | Modification pendant itération |
+| 3 | `removeIf` + `addAll` | ❌ UNSAFE | ~99-100% | Restructuration concurrente |
 | 4 | `sort` + `set` | ❌ UNSAFE | ~100% | Tri concurrent = corruption |
 | 5 | `final` ArrayList | ❌ UNSAFE | ~100% | `final` ≠ thread-safe |
-| 6 | `stream` sur source mutée | ❌ UNSAFE | ~3-5% | Stream = lecture directe, pas copie |
+| 6 | `stream` sur source mutée | ❌ UNSAFE | ~99-100% | Stream = lecture directe, pas copie |
 | 7 | `CopyOnWriteArrayList` | ✅ SAFE | 0% | Copie à chaque écriture |
 | 8 | `synchronizedList` | ✅ SAFE | 0% | Verrou mutex |
 | 9 | `synchronized` block | ✅ SAFE | 0% | Exclusion mutuelle explicite |

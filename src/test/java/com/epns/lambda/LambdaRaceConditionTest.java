@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class LambdaRaceConditionTest {
 
     private static final int THREADS = 50;
-    private static final int ITERATIONS_PER_THREAD = 2000;
-    private static final int TOTAL_HITS = THREADS * ITERATIONS_PER_THREAD; // 100,000
+    private static final int ITERATIONS_PER_THREAD = 20000;
+    private static final int TOTAL_HITS = THREADS * ITERATIONS_PER_THREAD; // 1,000,000
 
     // ========================================================================
     // HELPER
