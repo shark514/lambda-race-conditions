@@ -6,201 +6,156 @@
 
 ## Comment on le prouve
 
-Chaque test lance **50 threads** qui exécutent **20,000 itérations** chacun = **1,000,000 opérations par test**. On compte les exceptions et les corruptions de données, puis on affiche le taux de collision. Si c'est > 0%, c'est unsafe.
-
-```
-=== testReplaceAll_Unsafe ===
-Threads: 50 | Iterations: 2000 | Total hits: 1,000,000
-Exceptions caught: 847
-Data corruptions: 1,203
-Collision rate: 2.05%
-Status: UNSAFE ❌
-```
+Chaque test est exécuté à **5 niveaux de charge** : 100, 1K, 10K, 100K et 1M hits. On observe comment le taux de collision évolue avec la charge. Les tests SAFE prouvent 0% à tous les niveaux.
 
 ---
 
-## ❌ Tests UNSAFE — Ce qui casse
+## 📊 Tableau Récapitulatif Complet
 
-### 1. `testReplaceAll_Unsafe` — replaceAll sur ArrayList partagée
+### ❌ Tests UNSAFE
 
-**Ce qu'on fait :** 50 threads appellent simultanément `shared.replaceAll(x -> x + 1)` sur la même `ArrayList<Integer>`.
+#### 1. `replaceAll` sur ArrayList partagée
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 6          | 94          | 100.00%        |
+| 1,000     | 52         | 948         | 100.00%        |
+| 10,000    | 8,833      | 1,167       | 100.00%        |
+| 100,000   | 95,173     | 4,827       | 100.00%        |
+| 1,000,000 | 962,885    | 37,115      | 100.00%        |
 
-**Pourquoi c'est unsafe :** `replaceAll` itère sur chaque élément de la liste et le remplace. Pendant cette itération, un autre thread fait la même chose. Java détecte la modification concurrente via un compteur interne (`modCount`) et lance une `ConcurrentModificationException`. Mais quand deux threads modifient `modCount` en même temps, le compteur peut "sauter" la détection — et là, les données sont corrompues silencieusement : certains éléments reçoivent plus d'incréments que d'autres.
+> 💀 **100% à tous les niveaux.** `replaceAll` touche tous les éléments — la fenêtre de collision est maximale.
 
-**Résultat attendu :** ~100% de collision. Quasiment chaque itération produit soit une exception, soit une corruption. C'est le cas le plus violent parce que `replaceAll` touche **tous** les éléments — la fenêtre de collision est énorme.
+#### 2. `forEach` + `add` concurrent
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 2          | 0           | 2.00%          |
+| 1,000     | 2          | 0           | 0.20%          |
+| 10,000    | 28         | 0           | 0.28%          |
+| 100,000   | 3,702      | 0           | 3.70%          |
+| 1,000,000 | 395,188    | 0           | 39.52%         |
 
-**Leçon :** Ne jamais appeler `replaceAll` sur une `ArrayList` partagée entre threads sans synchronisation.
+> 📈 **Monte avec la charge.** De 2% à 100 hits jusqu'à ~40% à 1M. Plus de contention = plus de collisions.
 
----
+#### 3. `removeIf` + `addAll` concurrent
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 0          | 0           | 0.00%          |
+| 1,000     | 5          | 0           | 0.50%          |
+| 10,000    | 9,828      | 2           | 98.30%         |
+| 100,000   | 99,928     | 1           | 99.93%         |
+| 1,000,000 | 999,652    | 4           | 99.97%         |
 
-### 2. `testForEachAdd_Unsafe` — forEach + add sur la même liste
+> 🔥 **Explose au-delà de 1K.** Quasi-invisible à faible charge, catastrophique en prod.
 
-**Ce qu'on fait :** Pour chaque itération, on crée une petite liste `[1, 2, 3, 4, 5]`. Un thread la parcourt avec `forEach`, pendant qu'un autre thread appelle `add(99)` dessus.
+#### 4. `sort` + `set` concurrent
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 2          | 9           | 11.00%         |
+| 1,000     | 33         | 53          | 8.60%          |
+| 10,000    | 1,762      | 264         | 20.26%         |
+| 100,000   | 39,301     | 363         | 39.66%         |
+| 1,000,000 | 536,295    | 335         | 53.66%         |
 
-**Pourquoi c'est unsafe :** `forEach` utilise un itérateur interne qui vérifie `modCount` à chaque étape. Quand `add` modifie la liste pendant l'itération, le `modCount` change et l'itérateur lance une `ConcurrentModificationException`. Parfois, `add` se glisse entre deux vérifications et le résultat est une liste avec un nombre d'éléments inattendu.
+> 📈 **Croissance progressive.** Le tri est O(n log n) — la fenêtre de collision grandit avec la contention.
 
-**Résultat attendu :** ~3% de collision. Le taux est plus bas que `replaceAll` parce que l'opération `add` est très rapide (un seul appel) — la fenêtre de collision est plus étroite. Mais sur 1,000,000 essais, on capture quand même des centaines de cas.
+#### 5. `final` ArrayList (TOUJOURS unsafe)
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 3          | 97          | 100.00%        |
+| 1,000     | 3          | 997         | 100.00%        |
+| 10,000    | 6,946      | 3,054       | 100.00%        |
+| 100,000   | 87,936     | 12,064      | 100.00%        |
+| 1,000,000 | 933,167    | 66,833      | 100.00%        |
 
-**Leçon :** "Je ne fais que lire avec `forEach`" ne suffit pas. Si un autre thread écrit en même temps, ça casse.
+> 🎭 **`final` ≠ thread-safe.** Identique au test sans `final`. Piège classique en entrevue.
 
----
+#### 6. `stream()` sur source modifiée
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 1          | 1           | 2.00%          |
+| 1,000     | 8          | 0           | 0.80%          |
+| 10,000    | 114        | 2           | 1.16%          |
+| 100,000   | 2,462      | 3           | 2.47%          |
+| 1,000,000 | 28,462     | 52          | 2.85%          |
 
-### 3. `testRemoveIf_Unsafe` — removeIf avec lambda
-
-**Ce qu'on fait :** 50 threads appellent simultanément `removeIf(x -> x % 2 == 0)` puis `addAll(Arrays.asList(2, 4, 6, 8, 10))` sur la même liste.
-
-**Pourquoi c'est unsafe :** `removeIf` parcourt la liste, évalue le prédicat sur chaque élément, et supprime ceux qui matchent. Pendant ce temps, un autre thread ajoute des éléments. L'array interne de `ArrayList` peut être redimensionné par `addAll` pendant que `removeIf` est en train de le parcourir — ça cause des `ArrayIndexOutOfBoundsException`, des `ConcurrentModificationException`, ou des `null` dans la liste.
-
-**Résultat attendu :** ~99-100% de collision. `removeIf` + `addAll` modifient tous les deux la structure — la probabilité de conflit est élevée.
-
-**Leçon :** Les méthodes "fonctionnelles" de Java (`removeIf`, `replaceAll`) ne sont pas plus sûres que les boucles classiques. Elles utilisent le même `ArrayList` non-synchronisé en dessous.
-
----
-
-### 4. `testSort_Unsafe` — sort avec comparator lambda
-
-**Ce qu'on fait :** 50 threads appellent `sort(Comparator.reverseOrder())` puis `set(0, random)` sur la même liste.
-
-**Pourquoi c'est unsafe :** `sort` réorganise physiquement les éléments dans l'array interne. Pendant ce tri, un autre thread modifie un élément avec `set` ou lance son propre `sort`. Le résultat : des éléments dupliqués, des éléments perdus, un ordre qui n'est ni ascendant ni descendant. Le test vérifie que la liste est bien triée en ordre décroissant après `sort` — et elle ne l'est presque jamais.
-
-**Résultat attendu :** ~100% de collision. Chaque `sort` touche potentiellement tous les éléments (O(n log n) comparaisons et swaps) — la fenêtre de collision est massive.
-
-**Leçon :** Le tri concurrent sans verrou est une recette pour la corruption de données. Et contrairement aux exceptions, la corruption est **silencieuse** — votre liste a l'air normale mais les données sont fausses.
-
----
-
-### 5. `testFinal_StillUnsafe` — `final` ne protège RIEN
-
-**Ce qu'on fait :** Exactement le même test que `testReplaceAll_Unsafe`, mais la liste est déclarée `final`.
-
-```java
-final ArrayList<Integer> shared = new ArrayList<>();
-```
-
-**Pourquoi c'est unsafe :** `final` empêche de **réassigner la variable** (`shared = autreList` ne compile pas). Mais `final` ne protège absolument pas le **contenu** de l'objet. `shared.replaceAll(...)`, `shared.add(...)`, `shared.clear()` fonctionnent exactement pareil. C'est comme mettre un cadenas sur le panneau d'affichage mais laisser les feuilles épinglées dessus accessibles à tout le monde.
-
-**Résultat attendu :** ~100% de collision — identique au test sans `final`.
-
-**Leçon :** C'est un piège classique en entrevue. `final` ≠ immutable ≠ thread-safe. Si quelqu'un vous dit "c'est `final` donc c'est safe", il se trompe.
-
----
-
-### 6. `testStreamCollect_SharedSource_Unsafe` — stream sur source modifiée
-
-**Ce qu'on fait :** La moitié des threads exécute `shared.stream().map(x -> x * 2).collect(toList())`. L'autre moitié modifie la liste source avec `add` et `subList.clear()`.
-
-**Pourquoi c'est unsafe :** Les streams Java sont **lazy** — ils ne copient pas la source. `stream()` crée un pipeline qui lit directement depuis l'`ArrayList` sous-jacente. Si un autre thread modifie cette liste pendant que le stream la parcourt, on obtient des `ConcurrentModificationException`, des `ArrayIndexOutOfBoundsException`, des `null` dans le résultat, ou un résultat de taille incohérente.
-
-**Résultat attendu :** ~99-100% de collision. Le stream itère sur la liste entière, donc la fenêtre de collision est proportionnelle à la taille de la liste.
-
-**Leçon :** `stream()` n'est pas une copie défensive. Il lit la source en direct. Si la source bouge, le stream casse.
+> 📈 **Taux bas mais constant.** Les streams lisent directement la source — pas une copie.
 
 ---
 
-## ✅ Tests SAFE — Ce qui marche
+### ✅ Tests SAFE
 
-### 7. `testReplaceAll_CopyOnWriteArrayList` — CopyOnWriteArrayList
+#### 7. `CopyOnWriteArrayList`
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 0          | 0           | 0.00%          |
+| 1,000     | 0          | 0           | 0.00%          |
+| 10,000    | 0          | 0           | 0.00%          |
+| 100,000   | 0          | 0           | 0.00%          |
+| 1,000,000 | 0          | 0           | 0.00%          |
 
-**Ce qu'on fait :** Même test que `testReplaceAll_Unsafe`, mais avec `CopyOnWriteArrayList` au lieu d'`ArrayList`.
+#### 8. `Collections.synchronizedList`
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 0          | 0           | 0.00%          |
+| 1,000     | 0          | 0           | 0.00%          |
+| 10,000    | 0          | 0           | 0.00%          |
+| 100,000   | 0          | 0           | 0.00%          |
+| 1,000,000 | 0          | 0           | 0.00%          |
 
-**Pourquoi c'est safe :** `CopyOnWriteArrayList` crée une **copie de l'array interne à chaque modification**. Chaque `replaceAll` travaille sur sa propre copie. Les lectures ne sont jamais bloquées et ne voient jamais un état intermédiaire.
+#### 9. `synchronized` block manuel
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 0          | 0           | 0.00%          |
+| 1,000     | 0          | 0           | 0.00%          |
+| 10,000    | 0          | 0           | 0.00%          |
+| 100,000   | 0          | 0           | 0.00%          |
+| 1,000,000 | 0          | 0           | 0.00%          |
 
-**Résultat attendu :** 0% de collision. Toujours.
+#### 10. Copie défensive avant stream
+| Hits      | Exceptions | Corruptions | Collision Rate |
+|-----------|------------|-------------|----------------|
+| 100       | 0          | 0           | 0.00%          |
+| 1,000     | 0          | 0           | 0.00%          |
+| 10,000    | 0          | 0           | 0.00%          |
+| 100,000   | 0          | 0           | 0.00%          |
+| 1,000,000 | 0          | 0           | 0.00%          |
 
-**Avantages :**
-- Aucune synchronisation manuelle requise
-- Les lectures sont très rapides (pas de verrou)
-- Thread-safe par design
-
-**Inconvénients :**
-- Chaque écriture copie l'array entier → O(n) par modification
-- Catastrophique si les écritures sont fréquentes (notre test avec 100K écritures est lent)
-- Mémoire : chaque copie alloue un nouvel array
-
-**Quand l'utiliser :** Quand les lectures sont fréquentes et les écritures rares (ex: liste de listeners, configuration chargée au démarrage).
-
----
-
-### 8. `testReplaceAll_SynchronizedList` — Collections.synchronizedList
-
-**Ce qu'on fait :** On wrappe l'`ArrayList` avec `Collections.synchronizedList()`, et on utilise un bloc `synchronized(shared)` autour de `replaceAll`.
-
-**Pourquoi c'est safe :** `synchronizedList` wrappe chaque méthode individuelle dans un `synchronized`. Mais pour les opérations composées (itération, replaceAll), il faut **synchroniser manuellement** sur la liste. Le bloc `synchronized(shared)` garantit qu'un seul thread exécute `replaceAll` à la fois.
-
-**Résultat attendu :** 0% de collision.
-
-**Avantages :**
-- Simple à comprendre
-- Pas de copie → O(1) overhead par opération
-- Fonctionne avec n'importe quelle `List`
-
-**Inconvénients :**
-- Il faut penser à synchroniser manuellement pour les itérations — `synchronizedList` seul ne suffit PAS pour `replaceAll`, `forEach`, `sort`, etc.
-- Un seul thread à la fois → les lectures bloquent aussi
-- Risque de deadlock si on synchronise sur plusieurs objets
-
-**Quand l'utiliser :** Quand on a besoin d'un drop-in replacement rapide pour `ArrayList` et qu'on contrôle tous les points d'accès.
+> ✅ **0% à tous les niveaux, toutes les solutions.** La synchronisation fonctionne.
 
 ---
 
-### 9. `testReplaceAll_Synchronized_Block` — synchronized block manuel
+## 🔑 Observations Clés
 
-**Ce qu'on fait :** On utilise un objet `lock` dédié et on wrappe `replaceAll` dans `synchronized(lock)`.
-
-**Pourquoi c'est safe :** Le verrou garantit l'exclusion mutuelle. Un seul thread à la fois peut exécuter le bloc synchronisé. Les autres attendent. C'est la solution la plus explicite et la plus contrôlable.
-
-**Résultat attendu :** 0% de collision.
-
-**Avantages :**
-- Contrôle total sur la granularité du verrou
-- On peut protéger plusieurs opérations dans le même bloc (lecture + écriture atomique)
-- Pas de copie, pas de wrapper
-
-**Inconvénients :**
-- Verbeux — il faut synchroniser à chaque point d'accès
-- Si on oublie un `synchronized` quelque part, on retombe dans l'unsafe
-- Performance : un seul thread à la fois
-
-**Quand l'utiliser :** Quand on veut un contrôle fin et qu'on est discipliné sur la synchronisation. C'est la solution "old school" mais fiable.
+1. **La charge révèle les bugs.** `removeIf` montre 0% à 100 hits mais 99.97% à 1M. Un test unitaire classique ne voit rien.
+2. **`replaceAll` est le pire cas** — 100% de collision même à 100 hits.
+3. **`final` est un piège** — même résultat que sans `final`. `final` ≠ immutable ≠ thread-safe.
+4. **Les solutions SAFE sont absolues** — 0.00% à tous les niveaux, pas de dégradation.
 
 ---
 
-### 10. `testStream_DefensiveCopy` — copie défensive avant stream
+## Explications détaillées
 
-**Ce qu'on fait :** Avant de streamer, on prend un `synchronized` sur la liste et on fait `new ArrayList<>(shared)`. Puis on stream la copie, librement et sans verrou.
+### ❌ Tests UNSAFE
 
-**Pourquoi c'est safe :** La copie crée un snapshot isolé. Peu importe ce que les autres threads font à la liste originale après — notre copie ne bouge plus. Le stream travaille sur des données figées.
+| # | Test | Pourquoi c'est unsafe |
+|---|------|----------------------|
+| 1 | `replaceAll` sur ArrayList | Itération + modification concurrente sur tous les éléments |
+| 2 | `forEach` + `add` | Modification pendant itération — `ConcurrentModificationException` |
+| 3 | `removeIf` + `addAll` | Restructuration concurrente de l'array interne |
+| 4 | `sort` + `set` | Tri concurrent = corruption silencieuse des données |
+| 5 | `final` ArrayList | `final` empêche la réassignation, pas la mutation |
+| 6 | `stream` sur source mutée | `stream()` lit directement la source, pas une copie |
 
-**Résultat attendu :** 0% de collision.
+### ✅ Tests SAFE
 
-**Avantages :**
-- Le stream peut être parallèle sans risque
-- Pas besoin de garder le verrou pendant toute l'opération de stream
-- Pattern simple et facile à comprendre
-
-**Inconvénients :**
-- Coût mémoire : une copie par lecture
-- La copie elle-même doit être synchronisée (sinon on copie un état incohérent)
-- Les données sont potentiellement "stale" (snapshot du passé)
-
-**Quand l'utiliser :** Quand on a besoin de streamer/itérer longuement sur une collection partagée sans bloquer les écritures.
+| # | Solution | Comment ça marche | Quand l'utiliser |
+|---|----------|-------------------|------------------|
+| 7 | `CopyOnWriteArrayList` | Copie l'array à chaque écriture | Lectures fréquentes, écritures rares |
+| 8 | `synchronizedList` | Verrou mutex autour de chaque opération | Drop-in replacement rapide |
+| 9 | `synchronized` block | Exclusion mutuelle explicite | Contrôle total |
+| 10 | Copie défensive | Snapshot isolé avant stream | Stream/itération longue |
 
 ---
-
-## Tableau récapitulatif
-
-| # | Test | Type | Collision | Pourquoi |
-|---|------|------|-----------|----------|
-| 1 | `replaceAll` sur ArrayList | ❌ UNSAFE | ~100% | Itération + modification concurrente |
-| 2 | `forEach` + `add` | ❌ UNSAFE | ~3% | Modification pendant itération |
-| 3 | `removeIf` + `addAll` | ❌ UNSAFE | ~99-100% | Restructuration concurrente |
-| 4 | `sort` + `set` | ❌ UNSAFE | ~100% | Tri concurrent = corruption |
-| 5 | `final` ArrayList | ❌ UNSAFE | ~100% | `final` ≠ thread-safe |
-| 6 | `stream` sur source mutée | ❌ UNSAFE | ~99-100% | Stream = lecture directe, pas copie |
-| 7 | `CopyOnWriteArrayList` | ✅ SAFE | 0% | Copie à chaque écriture |
-| 8 | `synchronizedList` | ✅ SAFE | 0% | Verrou mutex |
-| 9 | `synchronized` block | ✅ SAFE | 0% | Exclusion mutuelle explicite |
-| 10 | Copie défensive | ✅ SAFE | 0% | Snapshot isolé |
 
 ## Quelle solution choisir ?
 
@@ -225,6 +180,7 @@ mvn test -Dtest="LambdaRaceConditionTest#testReplaceAll_Unsafe"
 
 ## Stack
 
-- Java 17
+- Java 21
 - JUnit 5
 - Maven
+- 10 tests × 5 niveaux de charge = 50 scénarios exécutés
