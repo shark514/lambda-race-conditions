@@ -25,7 +25,7 @@ public class ScenarioRunner {
         // Reset list
         for (int i = 0; i < list.size(); i++) list.set(i, 0);
 
-        int iterationsPerThread = totalHits / threads;
+        int iterationsPerThread = Math.max(1, totalHits / threads);
         int actualTotal = threads * iterationsPerThread;
 
         AtomicInteger okCount = new AtomicInteger();
@@ -110,7 +110,17 @@ public class ScenarioRunner {
     }
 
     public static void runScenario(String name, List<Integer> list, TransformAction action) throws InterruptedException {
-        int[] hitLevels = {100, 1_000, 10_000, 100_000};
+        int[] hitLevels;
+        String hitsParam = System.getProperty("hits");
+        if (hitsParam != null && !hitsParam.isEmpty()) {
+            try {
+                hitLevels = new int[]{Integer.parseInt(hitsParam)};
+            } catch (NumberFormatException e) {
+                hitLevels = new int[]{100, 1_000, 10_000, 100_000};
+            }
+        } else {
+            hitLevels = new int[]{100, 1_000, 10_000, 100_000};
+        }
         int threads = 50;
 
         System.out.printf("%n=== Scenario: %s ===%n", name);
