@@ -7,7 +7,7 @@ Each scenario does exactly the same thing: **50 threads simultaneously increment
 ## Running the tests
 
 ```bash
-# All scenarios
+# All scenarios (default: 100, 1K, 10K, 100K hits)
 mvn test
 
 # Individual scenario
@@ -18,6 +18,22 @@ mvn test -Dtest=com.epns.lambda.scenarios.DefensiveCopyTest
 mvn test -Dtest=com.epns.lambda.scenarios.SynchronizedListTest
 mvn test -Dtest=com.epns.lambda.scenarios.CopyOnWriteArrayListTest
 ```
+
+### Custom hit count
+
+Use `-Dhits=N` to run a single level with a specific number of hits:
+
+```bash
+# 1 million hits on a single scenario
+mvn test -Dtest=com.epns.lambda.scenarios.BaselineForLoopTest -Dhits=1000000
+
+# 5 million hits
+mvn test -Dtest=com.epns.lambda.scenarios.ReplaceAllUnsafeTest -Dhits=5000000
+```
+
+**IntelliJ IDEA**: Run → Edit Configurations → select your test → add `-Dhits=1000000` in **VM Options**.
+
+Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,000 → 100,000).
 
 ## Consolidated Results
 
