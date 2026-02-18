@@ -3,31 +3,23 @@ package com.epns.lambda.scenarios;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Logger;
 
 public class ScenarioRunner {
+
+    private static final Logger log = Logger.getLogger(ScenarioRunner.class.getName());
 
     @FunctionalInterface
     public interface TransformAction {
         void transform(List<Integer> list) throws Exception;
     }
 
-    public record LevelResult(int hits, int expected, int actual, int exceptions, boolean timeout) {
-        public int lost() { return expected - actual - exceptions; }
+    public record LevelResult(int hits, int ok, int ko, int exceptions) {
         public double errorRate() {
-            if (timeout) return -1;
-            int totalProblems = expected - actual;
-            return hits == 0 ? 0 : Math.max(0, totalProblems) * 100.0 / hits;
+            return hits == 0 ? 0 : (ko + exceptions) * 100.0 / hits;
         }
     }
 
-    /**
-     * Lance un niveau de test.
-     * 
-     * Métrique : valeur finale de list[0] vs valeur attendue.
-     * Chaque thread fait N itérations de transform(list) qui incrémente chaque élément de 1.
-     * Si tout est thread-safe, list[0] == totalHits à la fin.
-     * La différence = incréments perdus par collision.
-     */
     public static LevelResult runLevel(String scenarioName, List<Integer> list, int totalHits, int threads,
                                         TransformAction action) throws InterruptedException {
         // Reset list
@@ -36,9 +28,15 @@ public class ScenarioRunner {
         int iterationsPerThread = totalHits / threads;
         int actualTotal = threads * iterationsPerThread;
 
+        AtomicInteger okCount = new AtomicInteger();
+        AtomicInteger koCount = new AtomicInteger();
         AtomicInteger exceptionCount = new AtomicInteger();
+        AtomicInteger hitCounter = new AtomicInteger();
+
+        // For large volumes, log the first 30 + anomalies (max 30)
+        int maxVerboseLogs = 30;
+        int maxAnomalyLogs = 30;
         AtomicInteger anomalyLogged = new AtomicInteger();
-        int maxAnomalyLogs = totalHits <= 100 ? Integer.MAX_VALUE : 20;
 
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch ready = new CountDownLatch(threads);
@@ -52,13 +50,31 @@ public class ScenarioRunner {
                 try { go.await(); } catch (InterruptedException e) { return; }
                 try {
                     for (int i = 0; i < iterationsPerThread; i++) {
+                        int hitNum = hitCounter.incrementAndGet();
                         try {
+                            int before = list.get(0);
+                            int expected = before + 1;
                             action.transform(list);
+                            int obtained = list.get(0);
+
+                            if (obtained >= expected) {
+                                okCount.incrementAndGet();
+                                if (hitNum <= maxVerboseLogs) {
+                                    log.info(String.format("[%s] Hit #%d (thread-%d): expected=%d obtained=%d ✅ OK",
+                                            scenarioName, hitNum, threadId, expected, obtained));
+                                }
+                            } else {
+                                koCount.incrementAndGet();
+                                if (anomalyLogged.getAndIncrement() < maxAnomalyLogs) {
+                                    log.warning(String.format("[%s] Hit #%d (thread-%d): expected=%d obtained=%d ❌ LOST",
+                                            scenarioName, hitNum, threadId, expected, obtained));
+                                }
+                            }
                         } catch (Exception e) {
-                            int ec = exceptionCount.incrementAndGet();
+                            exceptionCount.incrementAndGet();
                             if (anomalyLogged.getAndIncrement() < maxAnomalyLogs) {
-                                System.out.printf("  [EXCEPTION] thread=%d iter=%d %s%n",
-                                        threadId, i, e.getClass().getSimpleName());
+                                log.severe(String.format("[%s] Hit #%d (thread-%d): ❌ EXCEPTION %s",
+                                        scenarioName, hitNum, threadId, e.getClass().getSimpleName()));
                             }
                         }
                     }
@@ -69,39 +85,53 @@ public class ScenarioRunner {
         }
 
         ready.await(10, TimeUnit.SECONDS);
-        go.countDown(); // Tous partent en même temps
+        go.countDown();
         boolean finished = done.await(60, TimeUnit.SECONDS);
         pool.shutdownNow();
 
         if (!finished) {
-            System.out.println("  ⚠ TIMEOUT after 60s");
-            return new LevelResult(actualTotal, actualTotal, 0, exceptionCount.get(), true);
+            log.severe(String.format("[%s] ⚠ TIMEOUT after 60s", scenarioName));
         }
 
+        int ok = okCount.get();
+        int ko = koCount.get();
+        int exc = exceptionCount.get();
+
+        // Log the final count
+        log.info(String.format("[%s] %d hits: OK=%d | LOST=%d | EXCEPTION=%d",
+                scenarioName, actualTotal, ok, ko, exc));
+
+        // Final value of list[0] vs expected
         int finalValue = list.get(0);
-        return new LevelResult(actualTotal, actualTotal, finalValue, exceptionCount.get(), false);
+        log.info(String.format("[%s] Final value list[0]=%d (expected=%d) → %d lost increments",
+                scenarioName, finalValue, actualTotal, actualTotal - finalValue));
+
+        return new LevelResult(actualTotal, ok, ko, exc);
     }
 
     public static void runScenario(String name, List<Integer> list, TransformAction action) throws InterruptedException {
         int[] hitLevels = {100, 1_000, 10_000, 100_000};
         int threads = 50;
 
-        System.out.printf("%n=== Scénario: %s ===%n", name);
-        System.out.printf("50 threads, list[0] commence à 0, chaque hit fait +1%n");
-        System.out.printf("| %-10s | %-10s | %-10s | %-10s | %-10s | %-12s |%n",
-                "Hits", "Attendu", "Obtenu", "Perdus", "Exceptions", "Taux perte");
-        System.out.println("|------------|------------|------------|------------|------------|--------------|");
+        System.out.printf("%n=== Scenario: %s ===%n", name);
+        System.out.printf("50 threads, list[0]=0, each hit does +1%n%n");
 
-        for (int hits : hitLevels) {
-            LevelResult r = runLevel(name, list, hits, threads, action);
-            if (r.timeout()) {
-                System.out.printf("| %-10d | %-10d | TIMEOUT    | -          | %-10d | TIMEOUT      |%n",
-                        r.hits(), r.expected(), r.exceptions());
-            } else {
-                int lost = r.expected() - r.actual();
-                System.out.printf("| %-10d | %-10d | %-10d | %-10d | %-10d | %10.2f%% |%n",
-                        r.hits(), r.expected(), r.actual(), lost, r.exceptions(), r.errorRate());
-            }
+        LevelResult[] results = new LevelResult[hitLevels.length];
+
+        for (int i = 0; i < hitLevels.length; i++) {
+            System.out.printf("--- %,d hits ---%n", hitLevels[i]);
+            results[i] = runLevel(name, list, hitLevels[i], threads, action);
+            System.out.println();
+        }
+
+        // Summary table
+        System.out.printf("=== Summary %s ===%n", name);
+        System.out.printf("| %-10s | %-10s | %-10s | %-10s | %-12s |%n",
+                "Hits", "OK", "Lost", "Exceptions", "Error Rate");
+        System.out.println("|------------|------------|------------|------------|--------------|");
+        for (LevelResult r : results) {
+            System.out.printf("| %-10d | %-10d | %-10d | %-10d | %10.2f%% |%n",
+                    r.hits(), r.ok(), r.ko(), r.exceptions(), r.errorRate());
         }
         System.out.println();
     }

@@ -11,12 +11,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * forEach() sur une liste pendant qu'un autre thread fait add().
+ * forEach() on a list while another thread calls add().
  * 
- * forEach utilise un itérateur interne qui vérifie modCount à chaque étape.
- * Quand add modifie la liste pendant l'itération, le modCount change et
- * l'itérateur lance ConcurrentModificationException. Parfois add se glisse
- * entre deux vérifications et le résultat est une liste corrompue.
+ * forEach uses an internal iterator that checks modCount at each step.
+ * When add modifies the list during iteration, the modCount changes and
+ * the iterator throws ConcurrentModificationException. Sometimes add slips
+ * between two checks and the result is a corrupted list.
  */
 @DisplayName("forEach + add on same list — UNSAFE")
 public class ForEachAddUnsafeTest {

@@ -1,16 +1,16 @@
-# Lambda Race Conditions — Démonstration
+# Lambda Race Conditions — Demonstration
 
-Ce projet démontre les **race conditions** qui surviennent lorsque plusieurs threads manipulent une `ArrayList` en parallèle. 6 approches sont comparées : boucle for classique, `replaceAll` avec lambda, variable `final`, copie défensive, `synchronizedList`, et `CopyOnWriteArrayList`.
+This project demonstrates **race conditions** that occur when multiple threads manipulate an `ArrayList` in parallel. 6 approaches are compared: classic for loop, `replaceAll` with lambda, `final` variable, defensive copy, `synchronizedList`, and `CopyOnWriteArrayList`.
 
-Chaque scénario fait exactement la même chose : **50 threads incrémentent simultanément chaque élément d'une liste**. La seule différence = la méthode utilisée. À la fin, on compare la valeur obtenue vs la valeur attendue. La différence = les incréments perdus par collision.
+Each scenario does exactly the same thing: **50 threads simultaneously increment each element of a list**. The only difference = the method used. At the end, we compare the obtained value vs the expected value. The difference = increments lost due to collisions.
 
-## Lancer les tests
+## Running the tests
 
 ```bash
-# Tous les scénarios
+# All scenarios
 mvn test
 
-# Un scénario individuel
+# Individual scenario
 mvn test -Dtest=com.epns.lambda.scenarios.BaselineForLoopTest
 mvn test -Dtest=com.epns.lambda.scenarios.ReplaceAllUnsafeTest
 mvn test -Dtest=com.epns.lambda.scenarios.FinalReplaceAllTest
@@ -19,13 +19,13 @@ mvn test -Dtest=com.epns.lambda.scenarios.SynchronizedListTest
 mvn test -Dtest=com.epns.lambda.scenarios.CopyOnWriteArrayListTest
 ```
 
-## Résultats consolidés
+## Consolidated Results
 
-**Métrique** : Taux de perte = `(attendu - obtenu) / attendu × 100`
+**Metric**: Loss rate = `(expected - obtained) / expected × 100`
 
-50 threads concurrents, liste de 10 éléments initialisés à 0.
+50 concurrent threads, list of 10 elements initialized to 0.
 
-| Scénario               | 100 hits | 1 000 hits | 10 000 hits | 100 000 hits |
+| Scenario               | 100 hits | 1,000 hits | 10,000 hits | 100,000 hits |
 |------------------------|----------|------------|-------------|--------------|
 | BaselineForLoop        | 1.00%    | 1.80%      | 20.60%      | **53.83%**   |
 | ReplaceAllUnsafe       | 11.00%   | 1.00%      | 2.69%       | **34.37%**   |
@@ -34,45 +34,45 @@ mvn test -Dtest=com.epns.lambda.scenarios.CopyOnWriteArrayListTest
 | SynchronizedList       | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 | CopyOnWriteArrayList   | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 
-### Ce que montrent les résultats
+### What the results show
 
-- **BaselineForLoop** : La boucle `for` classique perd >50% des incréments à 100K hits. Le read-modify-write (`get` → `+1` → `set`) n'est pas atomique.
-- **ReplaceAllUnsafe** : Le lambda `replaceAll` perd ~34% + génère des `ConcurrentModificationException`. Le pire des deux mondes.
-- **FinalReplaceAll** : `final` réduit *apparemment* les pertes (~15% vs ~34%) mais c'est un faux sentiment de sécurité. La référence est figée, **pas le contenu**.
-- **DefensiveCopy** : La PIRE approche (~64% de pertes !). Chaque thread copie la liste, la transforme, puis écrase l'original — mais pendant ce temps, les autres threads ont aussi écrasé. Lost updates en cascade.
-- **SynchronizedList** : **0% de pertes**. Le bloc `synchronized(list)` garantit l'atomicité de chaque opération.
-- **CopyOnWriteArrayList** : **0% de pertes**. Le verrouillage interne protège chaque mutation.
+- **BaselineForLoop**: The classic `for` loop loses >50% of increments at 100K hits. The read-modify-write (`get` → `+1` → `set`) is not atomic.
+- **ReplaceAllUnsafe**: The `replaceAll` lambda loses ~34% + generates `ConcurrentModificationException`. The worst of both worlds.
+- **FinalReplaceAll**: `final` *apparently* reduces losses (~15% vs ~34%) but this is a false sense of security. The reference is frozen, **not the content**.
+- **DefensiveCopy**: The WORST approach (~64% losses!). Each thread copies the list, transforms it, then overwrites the original — but meanwhile, other threads have also overwritten it. Cascading lost updates.
+- **SynchronizedList**: **0% losses**. The `synchronized(list)` block guarantees atomicity of each operation.
+- **CopyOnWriteArrayList**: **0% losses**. Internal locking protects each mutation.
 
-## Les 6 scénarios
+## The 6 Scenarios
 
-### 1. BaselineForLoop — `for` loop classique (pas de lambda)
+### 1. BaselineForLoop — Classic `for` loop (no lambda)
 ```java
 for (int i = 0; i < list.size(); i++) {
     list.set(i, list.get(i) + 1);
 }
 ```
-Pas de lambda. Démontre que le problème est fondamentalement lié à la **concurrence**, pas aux lambdas eux-mêmes. Le `get` + `set` séparés = read-modify-write non atomique.
+No lambda. Demonstrates that the problem is fundamentally about **concurrency**, not lambdas themselves. Separate `get` + `set` = non-atomic read-modify-write.
 
-### 2. ReplaceAllUnsafe — `replaceAll` avec lambda
+### 2. ReplaceAllUnsafe — `replaceAll` with lambda
 ```java
 list.replaceAll(x -> x + 1);
 ```
-Lambda directement sur `ArrayList` partagée. Génère des `ConcurrentModificationException` parce que `replaceAll` vérifie le `modCount` interne.
+Lambda directly on a shared `ArrayList`. Generates `ConcurrentModificationException` because `replaceAll` checks the internal `modCount`.
 
 ### 3. FinalReplaceAll — `final` + `replaceAll`
 ```java
 final ArrayList<Integer> list = new ArrayList<>();
 list.replaceAll(x -> x + 1);
 ```
-Le mot-clé `final` empêche de réassigner la variable `list`. Mais il ne protège **absolument pas** le contenu de la liste. Les race conditions sont les mêmes.
+The `final` keyword prevents reassigning the `list` variable. But it provides **absolutely no protection** for the list's content. The race conditions are the same.
 
-### 4. DefensiveCopy — copie défensive
+### 4. DefensiveCopy — Defensive copy
 ```java
 ArrayList<Integer> copy = new ArrayList<>(list);
 copy.replaceAll(x -> x + 1);
 Collections.copy(list, copy);
 ```
-Chaque thread travaille sur sa propre copie — pas d'exception. Mais quand il écrase la liste originale avec sa copie, il écrase aussi les modifications des autres threads. Résultat : **le pire taux de perte de tous les scénarios**.
+Each thread works on its own copy — no exception. But when it overwrites the original list with its copy, it also overwrites the modifications from other threads. Result: **the worst loss rate of all scenarios**.
 
 ### 5. SynchronizedList — `synchronized` + `Collections.synchronizedList()`
 ```java
@@ -81,33 +81,33 @@ synchronized (list) {
     list.replaceAll(x -> x + 1);
 }
 ```
-Le verrou `synchronized` rend chaque `replaceAll` atomique. **Zéro perte**, mais les threads attendent leur tour (contention).
+The `synchronized` lock makes each `replaceAll` atomic. **Zero loss**, but threads wait their turn (contention).
 
 ### 6. CopyOnWriteArrayList
 ```java
 CopyOnWriteArrayList<Integer> list = new CopyOnWriteArrayList<>();
 list.replaceAll(x -> x + 1);
 ```
-Chaque écriture crée une copie interne protégée par un `ReentrantLock`. **Zéro perte**. Plus lent en écriture, mais parfait pour les cas read-heavy.
+Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss**. Slower for writes, but perfect for read-heavy cases.
 
 ## Conclusion
 
-| Approche | Safe ? | Taux perte @ 100K | Pourquoi |
-|----------|--------|-------------------|----------|
-| for loop | ❌ | 53.83% | read-modify-write non atomique |
-| replaceAll | ❌ | 34.37% | ConcurrentModificationException + pertes |
-| final + replaceAll | ❌ | 14.83% | `final` = référence immuable, pas contenu |
-| Copie défensive | ❌ | 64.35% | Lost updates — la pire approche |
-| synchronizedList | ✅ | 0.00% | Verrou explicite = atomicité |
-| CopyOnWriteArrayList | ✅ | 0.00% | Verrouillage interne |
+| Approach | Safe? | Loss rate @ 100K | Why |
+|----------|-------|-------------------|-----|
+| for loop | ❌ | 53.83% | Non-atomic read-modify-write |
+| replaceAll | ❌ | 34.37% | ConcurrentModificationException + losses |
+| final + replaceAll | ❌ | 14.83% | `final` = immutable reference, not content |
+| Defensive copy | ❌ | 64.35% | Lost updates — the worst approach |
+| synchronizedList | ✅ | 0.00% | Explicit lock = atomicity |
+| CopyOnWriteArrayList | ✅ | 0.00% | Internal locking |
 
-**Règle d'or** : Si plusieurs threads modifient une collection, il faut soit un verrou explicite (`synchronized`), soit une structure concurrent (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Ni `final`, ni les copies défensives ne suffisent — et les copies défensives sont paradoxalement **la pire approche**.
+**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient — and defensive copies are paradoxically **the worst approach**.
 
-## Structure du projet
+## Project Structure
 
 ```
 src/test/java/com/epns/lambda/
-├── scenarios/          ← Les 6 scénarios comparatifs
+├── scenarios/          ← The 6 comparative scenarios
 │   ├── ScenarioRunner.java
 │   ├── BaselineForLoopTest.java
 │   ├── ReplaceAllUnsafeTest.java
@@ -115,15 +115,15 @@ src/test/java/com/epns/lambda/
 │   ├── DefensiveCopyTest.java
 │   ├── SynchronizedListTest.java
 │   └── CopyOnWriteArrayListTest.java
-├── unsafe/             ← Tests unitaires détaillés (anomalies par hit)
-└── safe/               ← Tests unitaires thread-safe
+├── unsafe/             ← Detailed unit tests (anomalies per hit)
+└── safe/               ← Thread-safe unit tests
 ```
 
-## Pré-requis
+## Prerequisites
 
 - Java 21+
 - Maven 3.8+
 
-## Article complet
+## Full Article
 
-Voir [`docs/article.md`](docs/article.md) pour l'analyse approfondie avec les implications en production et le lien avec les attaques DDoS.
+See [`docs/article.md`](docs/article.md) for the in-depth analysis with production implications and the link to DDoS attacks.

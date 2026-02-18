@@ -9,15 +9,15 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * final ArrayList — TOUJOURS unsafe.
+ * final ArrayList — ALWAYS unsafe.
  * 
- * final empêche de RÉASSIGNER la variable (shared = autreList ne compile pas).
- * Mais final ne protège absolument pas le CONTENU de l'objet.
- * shared.replaceAll(), shared.add(), shared.clear() fonctionnent exactement pareil.
- * C'est comme mettre un cadenas sur le panneau d'affichage mais laisser les
- * feuilles épinglées dessus accessibles à tout le monde.
+ * final prevents REASSIGNING the variable (shared = otherList won't compile).
+ * But final provides absolutely no protection for the object's CONTENT.
+ * shared.replaceAll(), shared.add(), shared.clear() work exactly the same.
+ * It's like putting a padlock on the bulletin board but leaving the
+ * papers pinned to it accessible to everyone.
  * 
- * Piège classique en entrevue : final ≠ immutable ≠ thread-safe.
+ * Classic interview trap: final ≠ immutable ≠ thread-safe.
  */
 @DisplayName("final ArrayList is STILL unsafe")
 public class FinalStillUnsafeTest {

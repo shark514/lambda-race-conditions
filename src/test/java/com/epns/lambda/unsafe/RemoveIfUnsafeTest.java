@@ -9,12 +9,12 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * removeIf() + addAll() concurrents sur la même ArrayList.
+ * removeIf() + addAll() concurrently on the same ArrayList.
  * 
- * removeIf parcourt la liste et supprime les éléments qui matchent le prédicat.
- * Pendant ce temps, addAll ajoute des éléments. L'array interne peut être
- * redimensionné pendant que removeIf le parcourt — ArrayIndexOutOfBoundsException,
- * ConcurrentModificationException, ou nulls dans la liste.
+ * removeIf iterates through the list and removes elements matching the predicate.
+ * Meanwhile, addAll adds elements. The internal array can be resized while
+ * removeIf traverses it — ArrayIndexOutOfBoundsException,
+ * ConcurrentModificationException, or nulls in the list.
  */
 @DisplayName("removeIf with lambda — UNSAFE")
 public class RemoveIfUnsafeTest {

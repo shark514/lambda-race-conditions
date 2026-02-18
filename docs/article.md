@@ -1,27 +1,27 @@
-# 🔥 Lambdas : le refactoring "cool" qui a silencieusement cassé des milliers d'apps
+# 🔥 Lambdas: The "Cool" Refactoring That Silently Broke Thousands of Apps
 
-*On vous a dit que c'était plus propre. Plus moderne. Plus lisible. On ne vous a pas dit que c'était une bombe à retardement.*
+*You were told it was cleaner. More modern. More readable. You weren't told it was a ticking time bomb.*
 
-*Depuis 2014, les développeurs Java refactorent leur code en lambdas. Modernisation, lisibilité, bonne vibe. Personne ne s'est demandé ce qu'on perdait en route. Cet article est pour ceux qui veulent comprendre pourquoi leur app crash "au hasard" en production — et pourquoi ce n'est pas du hasard.*
-
----
-
-## Un peu d'histoire
-
-Les expressions lambda ont été introduites en **Java 8**, sorti officiellement le **18 mars 2014**. Une révolution dans l'écosystème Java. Fini le code verbeux, place à l'élégance fonctionnelle.
-
-Et partout dans le monde, des équipes de développeurs ont lancé le même chantier : *"On refactore en lambdas."* Sprint après sprint, pull request après pull request, le vieux code a été réécrit. Les code reviews applaudissaient. La couverture de tests restait au vert.
-
-**Personne n'a vu venir le problème.**
+*Since 2014, Java developers have been refactoring their code to lambdas. Modernization, readability, good vibes. Nobody asked what was being lost along the way. This article is for those who want to understand why their app crashes "randomly" in production — and why it's not random at all.*
 
 ---
 
-## Qu'est-ce qu'une expression lambda ?
+## A Bit of History
 
-Pour ceux qui débarquent : une fonction lambda en Java est une expression qui représente un **comportement** (du code) qu'on peut passer comme donnée. Elle sert généralement à implémenter une **interface fonctionnelle** — une interface avec une seule méthode abstraite.
+Lambda expressions were introduced in **Java 8**, officially released on **March 18, 2014**. A revolution in the Java ecosystem. No more verbose code — enter functional elegance.
+
+And everywhere around the world, development teams launched the same initiative: *"Let's refactor to lambdas."* Sprint after sprint, pull request after pull request, legacy code was rewritten. Code reviews applauded. Test coverage stayed green.
+
+**Nobody saw the problem coming.**
+
+---
+
+## What Is a Lambda Expression?
+
+For newcomers: a lambda function in Java is an expression that represents a **behavior** (code) that can be passed as data. It typically implements a **functional interface** — an interface with a single abstract method.
 
 ```java
-// Avant Java 8 — verbeux mais explicite
+// Before Java 8 — verbose but explicit
 Runnable r = new Runnable() {
     @Override
     public void run() {
@@ -29,223 +29,223 @@ Runnable r = new Runnable() {
     }
 };
 
-// Avec lambda — élégant et concis
+// With lambda — elegant and concise
 Runnable r = () -> System.out.println("Hello");
 ```
 
-Plus court. Plus lisible. Plus *cool*.
+Shorter. More readable. More *cool*.
 
-On comprend l'engouement. Qui voudrait revenir aux classes anonymes de 6 lignes quand une seule suffit ?
+The enthusiasm is understandable. Who would want to go back to 6-line anonymous classes when a single line suffices?
 
-Mais derrière cette simplicité se cache une ambiguïté fondamentale.
+But behind this simplicity lies a fundamental ambiguity.
 
 ---
 
-## Le problème : ni synchrone, ni asynchrone
+## The Problem: Neither Synchronous Nor Asynchronous
 
-> ➡️ Une lambda Java n'est ni synchrone ni asynchrone par nature. Le mode d'exécution dépend **entièrement du contexte qui l'exécute**.
+> ➡️ A Java lambda is neither synchronous nor asynchronous by nature. The execution mode depends **entirely on the context that executes it**.
 
-Et c'est **là** que tout se joue.
+And **that's** where everything comes into play.
 
-On ne gère pas les choses de la même façon quand on a un ou plusieurs threads qui accèdent aux mêmes données. Or, **rien dans la syntaxe d'une lambda ne vous dit dans quel contexte elle sera exécutée.**
+Things aren't handled the same way when one or multiple threads access the same data. Yet, **nothing in a lambda's syntax tells you in which context it will be executed.**
 
-Quand est-ce que c'est synchrone ? Quand est-ce que c'est asynchrone ? **Le framework ou l'appelant décide** quand et dans quel thread le code tourne.
+When is it synchronous? When is it asynchronous? **The framework or caller decides** when and in which thread the code runs.
 
-Une réponse qui a au moins l'avantage d'être honnête : *nobody knows*.
+An answer that at least has the merit of being honest: *nobody knows*.
 
-### Lambda synchrone
+### Synchronous Lambda
 
 ```java
 Runnable r = () -> System.out.println("Hello");
-r.run(); // Exécuté dans le thread courant. Synchrone.
+r.run(); // Executed in the current thread. Synchronous.
 ```
 
-### Lambda asynchrone
+### Asynchronous Lambda
 
 ```java
 new Thread(() -> {
     System.out.println("Async");
-}).start(); // Exécuté dans un nouveau thread. Asynchrone.
+}).start(); // Executed in a new thread. Asynchronous.
 ```
 
-**Le même style de code. La même syntaxe. Deux comportements radicalement différents.**
+**The same code style. The same syntax. Two radically different behaviors.**
 
-Et le développeur qui écrit le lambda ? Il ne voit aucune différence. La syntaxe ne trahit rien.
+And the developer writing the lambda? They see no difference. The syntax reveals nothing.
 
 ---
 
-## En entreprise : le vrai danger
+## In the Enterprise: The Real Danger
 
-Les exemples ci-dessus sont théoriques. En entreprise, la réalité est plus insidieuse.
+The examples above are theoretical. In enterprise settings, reality is more insidious.
 
-Partout dans le code, les développeurs Java utilisent les lambdas **sans trop se demander si c'est sync ou async**. Et soyons honnêtes : la plupart d'entre nous pensent que c'est du synchrone. Parce que le code *a l'air* synchrone. Parce qu'il est écrit de cette façon. Parce qu'il *marche en test*.
+Everywhere in the code, Java developers use lambdas **without giving much thought to whether it's sync or async**. And let's be honest: most of us assume it's synchronous. Because the code *looks* synchronous. Because it's written that way. Because it *works in tests*.
 
-Prenons un exemple concret — le genre de code qu'on trouve dans n'importe quel projet d'entreprise :
+Let's take a concrete example — the kind of code found in any enterprise project:
 
 ```java
-ArrayList<String> truc(ArrayList<String> in) {
+ArrayList<String> process(ArrayList<String> in) {
     in.replaceAll(s -> s.toUpperCase());
     return in;
 }
 ```
 
-Ça paraît anodin. Et **ça marche**. La liste `in` retournée est bien en majuscules. Les tests passent. La code review approuve. Le sprint est livré.
+Looks harmless. And **it works**. The returned `in` list is properly uppercased. Tests pass. Code review approves. The sprint is delivered.
 
-**SAUF QUE.**
+**EXCEPT THAT.**
 
-Dans un contexte multithread, **personne ne peut garantir que `in` ne sera pas altérée avant, pendant et après** le traitement du `.replaceAll()`.
+In a multithreaded context, **nobody can guarantee that `in` won't be altered before, during, and after** the `.replaceAll()` processing.
 
-C'est ça le piège des lambdas. Le traitement peut être exécuté dans un contexte où **plusieurs services appellent la fonction `truc()` en parallèle**. Au moment où le `.replaceAll()` itère sur la liste, un autre thread peut être en train de :
+That's the lambda trap. The processing can be executed in a context where **multiple services call the `process()` function in parallel**. At the moment `.replaceAll()` iterates over the list, another thread may be:
 
-- Ajouter un élément à la même liste
-- Supprimer un élément de la même liste
-- Appeler la même fonction avec la même référence
+- Adding an element to the same list
+- Removing an element from the same list
+- Calling the same function with the same reference
 
-Le résultat ? Au mieux, une `ConcurrentModificationException`. Au pire — et c'est le cas le plus courant — **une corruption silencieuse des données**. Pas d'exception. Pas d'erreur dans les logs. Juste un résultat faux, aléatoirement, de manière non reproductible.
+The result? At best, a `ConcurrentModificationException`. At worst — and this is the most common case — **silent data corruption**. No exception. No error in the logs. Just a wrong result, randomly, in a non-reproducible manner.
 
-Le genre de bug qui rend fou.
-
----
-
-## Comment ça se produit concrètement ?
-
-Pas besoin d'un scénario exotique. Un cas banal suffit :
-
-> Un utilisateur fait **"refresh, refresh, refresh"** sur sa page web parce que c'est lent. Il bombarde le service, qui charge 2 ou 3 fois le même objet et finit en **collision avec d'autres requêtes**.
-
-Trois threads. La même `ArrayList`. Trois lambdas qui la manipulent en parallèle. **Race condition.**
-
-Le résultat dépend de l'ordre d'exécution des threads — un ordre que personne ne contrôle, que personne ne peut prédire, et qui change à chaque exécution.
-
-Lundi, ça marche. Mardi, ça crash. Mercredi, ça retourne des données corrompues sans erreur. Jeudi, impossible de reproduire. Vendredi, on ferme le ticket en "non reproductible".
-
-Le bug est toujours là. Il attend.
+The kind of bug that drives you insane.
 
 ---
 
-## Le sommet de l'iceberg : le DDoS
+## How Does This Happen Concretely?
 
-Maintenant, étendons le scénario.
+No exotic scenario needed. A mundane case suffices:
 
-Dans un contexte de **DDoS** (attaque par déni de service distribué), le système est plus lent et surchargé. Les requêtes s'accumulent. Les threads se multiplient. Le risque de collision est **multiplié**.
+> A user hits **"refresh, refresh, refresh"** on their web page because it's slow. They bombard the service, which loads the same object 2 or 3 times and ends up **colliding with other requests**.
 
-Mais voilà ce que la plupart des gens ne comprennent pas :
+Three threads. The same `ArrayList`. Three lambdas manipulating it in parallel. **Race condition.**
 
-**Un DDoS n'est pas juste une attaque pour "faire tomber" un service.**
+The result depends on thread execution order — an order that nobody controls, nobody can predict, and that changes with each execution.
 
-C'est aussi — et surtout — une façon de **provoquer des conditions particulières** afin de forcer l'exécution d'actions ou de code **non prévu**. En surchargeant un système, un attaquant peut :
+Monday, it works. Tuesday, it crashes. Wednesday, it returns corrupted data with no error. Thursday, impossible to reproduce. Friday, the ticket is closed as "non-reproducible".
 
-- **Provoquer des race conditions ciblées** — forcer deux threads à accéder à la même ressource au même moment
-- **Exploiter des états incohérents** — une liste de permissions à moitié modifiée, un token partiellement invalidé, une session dans un état impossible
-- **Bypasser des contrôles de sécurité** — si un contrôle d'accès repose sur l'intégrité d'une `ArrayList` manipulée par des lambdas, une race condition peut l'annuler
-- **Corrompre des données métier** — des montants financiers altérés, des réservations en double, des inventaires faux
-
-Le DDoS n'est que **le sommet de l'iceberg**.
-
-En dessous, il y a des milliers d'applications "modernisées" avec des lambdas, qui portent des race conditions silencieuses comme autant de **portes ouvertes**. Des failles qui **n'existaient pas avant le refactoring**. Le vieux `synchronized for` loop était moche, mais il était *safe*.
-
-En remplaçant le code moche par du code élégant, on a remplacé la sécurité par l'esthétique.
+The bug is still there. It's waiting.
 
 ---
 
-## La morale : les lambdas ne vous protègent pas
+## The Tip of the Iceberg: DDoS
 
-### Les opérations dangereuses
+Now, let's extend the scenario.
 
-Chaque lambda qui **modifie la collection d'origine** est une bombe potentielle en contexte multithread :
+In a **DDoS** (Distributed Denial of Service) context, the system is slower and overloaded. Requests pile up. Threads multiply. The risk of collision is **multiplied**.
+
+But here's what most people don't understand:
+
+**A DDoS isn't just an attack to "bring down" a service.**
+
+It's also — and especially — a way to **trigger specific conditions** in order to force the execution of **unintended actions or code**. By overloading a system, an attacker can:
+
+- **Trigger targeted race conditions** — force two threads to access the same resource at the same moment
+- **Exploit inconsistent states** — a half-modified permissions list, a partially invalidated token, a session in an impossible state
+- **Bypass security controls** — if an access check relies on the integrity of an `ArrayList` manipulated by lambdas, a race condition can nullify it
+- **Corrupt business data** — altered financial amounts, duplicate reservations, incorrect inventories
+
+DDoS is only **the tip of the iceberg**.
+
+Beneath it, there are thousands of "modernized" applications with lambdas, carrying silent race conditions like so many **open doors**. Vulnerabilities that **didn't exist before the refactoring**. The old `synchronized for` loop was ugly, but it was *safe*.
+
+By replacing ugly code with elegant code, we replaced security with aesthetics.
+
+---
+
+## The Moral: Lambdas Don't Protect You
+
+### Dangerous Operations
+
+Every lambda that **modifies the source collection** is a potential bomb in a multithreaded context:
 
 ```java
-// ❌ DANGER — modification in-place de la collection
+// ❌ DANGER — in-place modification of the collection
 list.forEach(s -> list.add(s + "_copy"));     // ConcurrentModificationException
 list.forEach(s -> list.remove(s));             // ConcurrentModificationException
-list.replaceAll(s -> s.toUpperCase());         // Race condition silencieuse
-list.removeIf(s -> s.isEmpty());              // Race condition silencieuse
-list.sort((a, b) -> a.compareTo(b));          // Race condition silencieuse
+list.replaceAll(s -> s.toUpperCase());         // Silent race condition
+list.removeIf(s -> s.isEmpty());              // Silent race condition
+list.sort((a, b) -> a.compareTo(b));          // Silent race condition
 ```
 
-Ces opérations **ne créent pas de nouvel objet** à l'intérieur du lambda. Elles modifient directement la liste d'origine. C'est là que le danger est maximal.
+These operations **don't create a new object** inside the lambda. They modify the original list directly. That's where the danger is greatest.
 
-### Les opérations "généralement safe"
+### "Generally Safe" Operations
 
-`.map()` et `.filter()` via les Streams sont **généralement safe** car ils produisent de nouvelles collections :
+`.map()` and `.filter()` via Streams are **generally safe** because they produce new collections:
 
 ```java
-// ✅ Généralement safe — crée une nouvelle liste
+// ✅ Generally safe — creates a new list
 List<String> result = list.stream()
     .filter(s -> !s.isEmpty())
     .map(String::toUpperCase)
     .collect(Collectors.toList());
 ```
 
-### Mais même là, rien n'est garanti
+### But Even There, Nothing Is Guaranteed
 
-Car le vrai problème est en amont : la `ArrayList` passée en paramètre **n'est pas thread-safe**. Point.
+Because the real problem is upstream: the `ArrayList` passed as a parameter **is not thread-safe**. Period.
 
-Rien — absolument rien — ne garantit que la liste d'origine n'aura pas été altérée :
+Nothing — absolutely nothing — guarantees that the original list won't have been altered:
 
-- **Avant** l'exécution du lambda — un autre thread modifie la liste entre l'appel de la fonction et le début de l'itération
-- **Pendant** l'exécution du lambda — un autre thread ajoute ou supprime des éléments alors que le lambda itère
-- **Après** l'exécution du lambda — le résultat est déjà obsolète au moment où il est retourné
+- **Before** the lambda executes — another thread modifies the list between the function call and the start of iteration
+- **During** the lambda execution — another thread adds or removes elements while the lambda iterates
+- **After** the lambda executes — the result is already stale by the time it's returned
 
-Entre le moment où vous appelez `.stream()` et le moment où le lambda s'exécute, un autre thread a pu `.add()`, `.remove()`, `.clear()` la liste. Votre lambda travaille sur un **état fantôme** — une photo qui n'existe peut-être déjà plus.
+Between the moment you call `.stream()` and the moment the lambda executes, another thread may have called `.add()`, `.remove()`, `.clear()` on the list. Your lambda is working on a **phantom state** — a snapshot that may no longer exist.
 
-### Et non, `final` ne change rien
+### And No, `final` Changes Nothing
 
 ```java
 final ArrayList<String> list = getList();
 list.forEach(s -> System.out.println(s));
-// "C'est final, c'est safe !" — NON.
+// "It's final, it's safe!" — NO.
 ```
 
-Le mot-clé `final` est un **verrou immuable sur la référence** de la variable. Il garantit que `list` pointera toujours vers le même objet en mémoire.
+The `final` keyword is an **immutable lock on the variable's reference**. It guarantees that `list` will always point to the same object in memory.
 
-**Mais il ne garantit absolument pas que le contenu de la liste reste inchangé.**
+**But it absolutely does not guarantee that the list's content remains unchanged.**
 
-`final` empêche ça :
+`final` prevents this:
 ```java
-list = new ArrayList<>(); // ❌ Erreur de compilation — la référence est final
+list = new ArrayList<>(); // ❌ Compile error — the reference is final
 ```
 
-`final` n'empêche PAS ça :
+`final` does NOT prevent this:
 ```java
-list.add("nouveau");      // ✅ Compile — le contenu change
-list.clear();             // ✅ Compile — la liste est vidée
-list.remove(0);           // ✅ Compile — un élément disparaît
+list.add("new");          // ✅ Compiles — content changes
+list.clear();             // ✅ Compiles — the list is emptied
+list.remove(0);           // ✅ Compiles — an element disappears
 ```
 
-C'est la différence entre **verrouiller la boîte aux lettres** et **verrouiller le courrier à l'intérieur**. `final` verrouille la boîte. N'importe qui peut encore changer ce qu'il y a dedans.
+It's the difference between **locking the mailbox** and **locking the mail inside**. `final` locks the mailbox. Anyone can still change what's inside.
 
 ---
 
-## En résumé
+## Summary
 
-| Ce que vous croyez | La réalité |
+| What you believe | Reality |
 |---|---|
-| "C'est un lambda, c'est simple" | Le contexte d'exécution est imprévisible |
-| "C'est `final`, c'est protégé" | Seule la référence est protégée, pas le contenu |
-| "`.map()` et `.filter()` sont safe" | La source peut être altérée pendant l'itération |
-| "Mon code marche en test" | Les tests tournent en single-thread |
-| "On a jamais eu de bug" | Les race conditions sont silencieuses et aléatoires |
-| "Le refactoring en lambda modernise le code" | Il peut aussi introduire des failles qui n'existaient pas |
+| "It's a lambda, it's simple" | The execution context is unpredictable |
+| "It's `final`, it's protected" | Only the reference is protected, not the content |
+| "`.map()` and `.filter()` are safe" | The source can be altered during iteration |
+| "My code works in tests" | Tests run single-threaded |
+| "We've never had a bug" | Race conditions are silent and random |
+| "Refactoring to lambdas modernizes the code" | It can also introduce vulnerabilities that didn't exist before |
 
 ---
 
 ## Conclusion
 
-Les lambdas sont un outil magnifique. Elles rendent le code plus lisible, plus expressif, plus élégant. Personne ne dit qu'il faut les abandonner.
+Lambdas are a beautiful tool. They make code more readable, more expressive, more elegant. Nobody is saying they should be abandoned.
 
-Mais un outil magnifique entre des mains qui ne comprennent pas ce qu'il fait, **c'est une arme**.
+But a beautiful tool in hands that don't understand what it does, **is a weapon**.
 
-La prochaine fois que vous refactorez un vieux `for` loop en lambda, posez-vous une seule question :
+The next time you refactor an old `for` loop into a lambda, ask yourself one single question:
 
-> **"Qui d'autre touche à cette donnée en ce moment ?"**
+> **"Who else is touching this data right now?"**
 
-Si la réponse est *"je ne sais pas"* — vous avez un problème.
+If the answer is *"I don't know"* — you have a problem.
 
-Et si vous êtes en train de vous dire *"ça ne m'arrivera pas"* — relisez cet article. Parce que le développeur qui a introduit le bug en production pensait exactement la même chose.
+And if you're thinking *"that won't happen to me"* — reread this article. Because the developer who introduced the bug in production was thinking exactly the same thing.
 
 ---
 
-*Par Pierre — développeur Java/Kotlin, architecte logiciel, et le gars qui a découvert tout ça grâce à une question d'entretien d'embauche qu'il n'a pas su répondre.*
+*By Pierre — Java/Kotlin developer, software architect, and the guy who discovered all this thanks to a job interview question he couldn't answer.*
 
-*Et c'est peut-être la meilleure chose qui lui soit arrivée.*
+*And it might be the best thing that ever happened to him.*
