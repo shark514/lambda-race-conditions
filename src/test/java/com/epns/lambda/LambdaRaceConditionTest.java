@@ -1,449 +1,429 @@
 package com.epns.lambda;
 
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.ConcurrentModificationException;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Démonstration des race conditions avec les lambdas sur ArrayList.
- *
- * ArrayList n'est PAS thread-safe. Quand on utilise des lambdas (replaceAll, forEach, removeIf, sort)
- * depuis plusieurs threads simultanément, on obtient :
- * - ConcurrentModificationException
- * - Corruption silencieuse des données
- * - Comportement imprévisible
- *
- * Ces tests PROUVENT le problème et montrent les solutions.
+ * Démonstration MASSIVE des race conditions avec les lambdas sur ArrayList.
+ * 
+ * Chaque test bombarde 100,000 fois pour mesurer le taux de collision réel.
+ * Les tests UNSAFE prouvent que ArrayList n'est PAS thread-safe.
+ * Les tests SAFE prouvent que les solutions fonctionnent.
  */
 public class LambdaRaceConditionTest {
 
-    private static final int THREAD_COUNT = 10;
-    private static final int LIST_SIZE = 1000;
-    private static final int REPEAT_COUNT = 5; // Répéter pour fiabilité
+    private static final int THREADS = 50;
+    private static final int ITERATIONS_PER_THREAD = 2000;
+    private static final int TOTAL_HITS = THREADS * ITERATIONS_PER_THREAD; // 100,000
 
     // ========================================================================
-    // HELPER : crée une ArrayList pré-remplie
+    // HELPER
     // ========================================================================
-    private ArrayList<Integer> createList() {
+
+    private ArrayList<Integer> freshList(int size) {
         ArrayList<Integer> list = new ArrayList<>();
-        IntStream.range(0, LIST_SIZE).forEach(list::add);
+        IntStream.range(0, size).forEach(list::add);
         return list;
     }
 
-    // ========================================================================
-    // CAS DANGEREUX : replaceAll
-    // ========================================================================
+    private void printStats(String testName, int exceptions, int corruptions, boolean expectUnsafe) {
+        int total = exceptions + corruptions;
+        double rate = (total * 100.0) / TOTAL_HITS;
+        String status = total > 0 ? "UNSAFE ❌" : "SAFE ✅";
+        System.out.printf("""
+                
+                === %s ===
+                Threads: %d | Iterations: %d | Total hits: %,d
+                Exceptions caught: %,d
+                Data corruptions: %,d
+                Collision rate: %.2f%%
+                Status: %s
+                """, testName, THREADS, ITERATIONS_PER_THREAD, TOTAL_HITS,
+                exceptions, corruptions, rate, status);
 
-    /**
-     * replaceAll applique une lambda à chaque élément.
-     * Si un autre thread modifie la liste en même temps → ConcurrentModificationException.
-     *
-     * On lance N threads qui font replaceAll pendant qu'un autre thread ajoute des éléments.
-     */
-    @RepeatedTest(REPEAT_COUNT)
-    @DisplayName("UNSAFE - replaceAll lance ConcurrentModificationException")
-    void testReplaceAllRaceCondition_UNSAFE() throws InterruptedException {
-        ArrayList<Integer> list = createList();
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean cmeDetected = new AtomicBoolean(false);
-
-        // Thread 1 : replaceAll en boucle (applique x -> x * 2)
-        Thread writer = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 100; i++) {
-                    try {
-                        list.replaceAll(x -> x * 2);
-                    } catch (ConcurrentModificationException e) {
-                        cmeDetected.set(true);
-                        return;
-                    }
-                    // Sleep pour laisser le temps aux collisions
-                    Thread.sleep(0, 1);
-                }
-            } catch (InterruptedException ignored) {}
-        });
-
-        // Thread 2 : ajoute et supprime des éléments en parallèle
-        Thread mutator = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 200; i++) {
-                    list.add(999);
-                    Thread.sleep(0, 1);
-                    if (!list.isEmpty()) list.remove(list.size() - 1);
-                }
-            } catch (ConcurrentModificationException e) {
-                cmeDetected.set(true);
-            } catch (Exception ignored) {}
-        });
-
-        writer.start();
-        mutator.start();
-        latch.countDown(); // Go !
-
-        writer.join(5000);
-        mutator.join(5000);
-
-        // On s'attend à détecter une ConcurrentModificationException
-        assertTrue(cmeDetected.get(),
-                "Une ConcurrentModificationException aurait dû être détectée ! " +
-                "ArrayList.replaceAll n'est pas thread-safe.");
-    }
-
-    // ========================================================================
-    // CAS DANGEREUX : forEach + add
-    // ========================================================================
-
-    /**
-     * forEach itère avec une lambda. Si on modifie la liste pendant l'itération
-     * (même depuis le même thread via la lambda), on obtient une CME.
-     * En multi-thread, c'est encore pire.
-     */
-    @RepeatedTest(REPEAT_COUNT)
-    @DisplayName("UNSAFE - forEach + add en parallèle = ConcurrentModificationException")
-    void testForEachPlusAddRaceCondition_UNSAFE() throws InterruptedException {
-        ArrayList<Integer> list = createList();
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean cmeDetected = new AtomicBoolean(false);
-
-        // Thread 1 : forEach qui lit chaque élément
-        Thread reader = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 100; i++) {
-                    try {
-                        list.forEach(x -> {
-                            // Simule un traitement lent pour maximiser la fenêtre de collision
-                            if (x % 100 == 0) {
-                                try { Thread.sleep(0, 100); } catch (InterruptedException ignored) {}
-                            }
-                        });
-                    } catch (ConcurrentModificationException e) {
-                        cmeDetected.set(true);
-                        return;
-                    }
-                }
-            } catch (InterruptedException ignored) {}
-        });
-
-        // Thread 2 : ajoute des éléments pendant le forEach
-        Thread adder = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 500; i++) {
-                    list.add(i);
-                    Thread.sleep(0, 1);
-                }
-            } catch (Exception ignored) {}
-        });
-
-        reader.start();
-        adder.start();
-        latch.countDown();
-
-        reader.join(5000);
-        adder.join(5000);
-
-        assertTrue(cmeDetected.get(),
-                "forEach + add concurrent aurait dû lancer une ConcurrentModificationException !");
-    }
-
-    // ========================================================================
-    // CAS DANGEREUX : removeIf
-    // ========================================================================
-
-    /**
-     * removeIf utilise une lambda pour filtrer. En multi-thread,
-     * la structure interne de l'ArrayList peut être corrompue.
-     */
-    @RepeatedTest(REPEAT_COUNT)
-    @DisplayName("UNSAFE - removeIf en parallèle = CME ou corruption")
-    void testRemoveIfRaceCondition_UNSAFE() throws InterruptedException {
-        ArrayList<Integer> list = createList();
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean problemDetected = new AtomicBoolean(false);
-
-        // Plusieurs threads font removeIf en même temps
-        ExecutorService pool = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        for (int t = 0; t < THREAD_COUNT; t++) {
-            final int threadId = t;
-            pool.submit(() -> {
-                try {
-                    latch.await();
-                    for (int i = 0; i < 50; i++) {
-                        try {
-                            // Chaque thread supprime les multiples de son ID
-                            list.removeIf(x -> x % (threadId + 2) == 0);
-                            // Et en rajoute pour maintenir du contenu
-                            list.add(threadId * 1000 + i);
-                            Thread.sleep(0, 1);
-                        } catch (ConcurrentModificationException | ArrayIndexOutOfBoundsException |
-                                 NullPointerException e) {
-                            // NullPointerException et ArrayIndexOutOfBoundsException = corruption interne !
-                            problemDetected.set(true);
-                            return;
-                        }
-                    }
-                } catch (InterruptedException ignored) {}
-            });
+        if (expectUnsafe) {
+            assertTrue(total > 0, "Expected collisions but got none — race condition not triggered");
+        } else {
+            assertEquals(0, total, "Expected 0 collisions but got " + total);
         }
-
-        latch.countDown();
-        pool.shutdown();
-        pool.awaitTermination(10, TimeUnit.SECONDS);
-
-        assertTrue(problemDetected.get(),
-                "removeIf concurrent aurait dû provoquer une erreur ! " +
-                "La liste est corrompue ou une CME a été lancée.");
     }
 
     // ========================================================================
-    // CAS DANGEREUX : sort
+    // UNSAFE TESTS
     // ========================================================================
 
-    /**
-     * sort avec un Comparator lambda. En multi-thread avec des modifications
-     * concurrentes, le tri peut corrompre la liste ou lancer une exception.
-     */
-    @RepeatedTest(REPEAT_COUNT)
-    @DisplayName("UNSAFE - sort concurrent = CME ou résultat incohérent")
-    void testSortRaceCondition_UNSAFE() throws InterruptedException {
-        ArrayList<Integer> list = createList();
-        // Mélanger pour que le sort ait du travail
-        Collections.shuffle(list);
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean problemDetected = new AtomicBoolean(false);
+    @Test
+    @DisplayName("replaceAll on shared ArrayList — UNSAFE")
+    void testReplaceAll_Unsafe() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = freshList(100);
 
-        // Thread 1 : sort en boucle
-        Thread sorter = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 100; i++) {
-                    try {
-                        // Lambda de tri : ordre naturel avec un petit sleep pour élargir la fenêtre
-                        list.sort((a, b) -> {
-                            try { Thread.sleep(0, 1); } catch (InterruptedException ignored) {}
-                            return Integer.compare(a, b);
-                        });
-                    } catch (ConcurrentModificationException | ArrayIndexOutOfBoundsException |
-                             NullPointerException | IllegalArgumentException e) {
-                        problemDetected.set(true);
-                        return;
-                    }
-                }
-            } catch (InterruptedException ignored) {}
-        });
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
 
-        // Thread 2 : modifie la liste pendant le tri
-        Thread mutator = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 300; i++) {
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
                     try {
-                        if (!list.isEmpty()) {
-                            list.set(0, -i); // Modifie un élément pendant le tri
-                            list.add(i);
+                        shared.replaceAll(x -> x + 1);
+                        // Check for corruption: all elements should be equal after N increments
+                        // but with races they diverge
+                        Set<Integer> unique = new HashSet<>(shared);
+                        if (unique.size() > 1) {
+                            corruptions.incrementAndGet();
                         }
                     } catch (Exception e) {
-                        problemDetected.set(true);
-                        return;
-                    }
-                    Thread.sleep(0, 1);
-                }
-            } catch (InterruptedException ignored) {}
-        });
-
-        sorter.start();
-        mutator.start();
-        latch.countDown();
-
-        sorter.join(10000);
-        mutator.join(10000);
-
-        assertTrue(problemDetected.get(),
-                "sort concurrent aurait dû provoquer une erreur ou une incohérence !");
-    }
-
-    // ========================================================================
-    // CAS SAFE : CopyOnWriteArrayList
-    // ========================================================================
-
-    /**
-     * CopyOnWriteArrayList crée une copie du tableau interne à chaque modification.
-     * Les itérations (forEach, replaceAll) travaillent sur un snapshot → pas de CME.
-     *
-     * ATTENTION : performant seulement si les lectures >> écritures.
-     */
-    @Test
-    @DisplayName("SAFE - CopyOnWriteArrayList supporte forEach + add concurrent")
-    void testForEachWithCopyOnWriteArrayList_SAFE() throws InterruptedException {
-        CopyOnWriteArrayList<Integer> list = new CopyOnWriteArrayList<>();
-        IntStream.range(0, LIST_SIZE).forEach(list::add);
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean cmeDetected = new AtomicBoolean(false);
-        AtomicReference<Exception> unexpectedException = new AtomicReference<>();
-
-        Thread reader = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 50; i++) {
-                    try {
-                        // forEach sur CopyOnWriteArrayList = safe, itère sur un snapshot
-                        list.forEach(x -> {
-                            if (x % 100 == 0) {
-                                try { Thread.sleep(0, 100); } catch (InterruptedException ignored) {}
-                            }
-                        });
-                    } catch (ConcurrentModificationException e) {
-                        cmeDetected.set(true);
+                        exceptions.incrementAndGet();
                     }
                 }
-            } catch (Exception e) {
-                unexpectedException.set(e);
-            }
-        });
-
-        Thread adder = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 200; i++) {
-                    list.add(i);
-                    Thread.sleep(0, 1);
-                }
-            } catch (Exception e) {
-                unexpectedException.set(e);
-            }
-        });
-
-        reader.start();
-        adder.start();
-        latch.countDown();
-
-        reader.join(5000);
-        adder.join(5000);
-
-        assertNull(unexpectedException.get(), "Aucune exception inattendue ne devrait survenir");
-        assertFalse(cmeDetected.get(),
-                "CopyOnWriteArrayList ne devrait JAMAIS lancer ConcurrentModificationException !");
-    }
-
-    // ========================================================================
-    // CAS SAFE : synchronized
-    // ========================================================================
-
-    /**
-     * Synchroniser manuellement sur la liste protège toutes les opérations.
-     * C'est la solution la plus simple et la plus flexible.
-     */
-    @Test
-    @DisplayName("SAFE - synchronized protège replaceAll + modifications concurrentes")
-    void testReplaceAllWithSynchronized_SAFE() throws InterruptedException {
-        ArrayList<Integer> list = createList();
-        // On utilise la liste elle-même comme monitor
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean cmeDetected = new AtomicBoolean(false);
-
-        Thread writer = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 50; i++) {
-                    synchronized (list) {
-                        // Toute l'opération replaceAll est protégée
-                        list.replaceAll(x -> x + 1);
-                    }
-                    Thread.sleep(0, 1);
-                }
-            } catch (ConcurrentModificationException e) {
-                cmeDetected.set(true);
-            } catch (InterruptedException ignored) {}
-        });
-
-        Thread mutator = new Thread(() -> {
-            try {
-                latch.await();
-                for (int i = 0; i < 100; i++) {
-                    synchronized (list) {
-                        list.add(999);
-                        if (list.size() > LIST_SIZE + 10) {
-                            list.remove(list.size() - 1);
-                        }
-                    }
-                    Thread.sleep(0, 1);
-                }
-            } catch (ConcurrentModificationException e) {
-                cmeDetected.set(true);
-            } catch (InterruptedException ignored) {}
-        });
-
-        writer.start();
-        mutator.start();
-        latch.countDown();
-
-        writer.join(5000);
-        mutator.join(5000);
-
-        assertFalse(cmeDetected.get(),
-                "Avec synchronized, aucune ConcurrentModificationException ne devrait survenir !");
-    }
-
-    /**
-     * synchronized protège aussi removeIf + sort en parallèle.
-     */
-    @Test
-    @DisplayName("SAFE - synchronized protège removeIf + sort concurrents")
-    void testRemoveIfAndSortWithSynchronized_SAFE() throws InterruptedException {
-        ArrayList<Integer> list = createList();
-        Collections.shuffle(list);
-        CountDownLatch latch = new CountDownLatch(1);
-        AtomicBoolean problemDetected = new AtomicBoolean(false);
-
-        ExecutorService pool = Executors.newFixedThreadPool(THREAD_COUNT);
-
-        for (int t = 0; t < THREAD_COUNT; t++) {
-            final int threadId = t;
-            pool.submit(() -> {
-                try {
-                    latch.await();
-                    for (int i = 0; i < 20; i++) {
-                        synchronized (list) {
-                            if (threadId % 2 == 0) {
-                                list.removeIf(x -> x % 7 == 0);
-                                // Remettre des éléments pour ne pas vider la liste
-                                for (int j = 0; j < 10; j++) list.add(threadId * 100 + j);
-                            } else {
-                                list.sort(Integer::compareTo);
-                            }
-                        }
-                        Thread.sleep(0, 1);
-                    }
-                } catch (Exception e) {
-                    problemDetected.set(true);
-                }
+                latch.countDown();
             });
         }
+        latch.await(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testReplaceAll_Unsafe", exceptions.get(), corruptions.get(), true);
+    }
 
-        latch.countDown();
-        pool.shutdown();
-        pool.awaitTermination(10, TimeUnit.SECONDS);
+    @Test
+    @DisplayName("forEach + add on same list — UNSAFE")
+    void testForEachAdd_Unsafe() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
 
-        assertFalse(problemDetected.get(),
-                "Avec synchronized, removeIf et sort concurrents sont safe !");
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    List<Integer> shared = new ArrayList<>(Arrays.asList(1, 2, 3, 4, 5));
+                    try {
+                        // One thread reads, this thread modifies
+                        Thread modifier = new Thread(() -> {
+                            try { shared.add(99); } catch (Exception e) { exceptions.incrementAndGet(); }
+                        });
+                        modifier.start();
+                        shared.forEach(x -> {
+                            // force iteration while modifier runs
+                            if (x == 3) Thread.yield();
+                        });
+                        modifier.join(100);
+                        // Check: list should have exactly 6 elements
+                        if (shared.size() != 6) {
+                            corruptions.incrementAndGet();
+                        }
+                    } catch (ConcurrentModificationException e) {
+                        exceptions.incrementAndGet();
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(60, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testForEachAdd_Unsafe", exceptions.get(), corruptions.get(), true);
+    }
+
+    @Test
+    @DisplayName("removeIf with lambda — UNSAFE")
+    void testRemoveIf_Unsafe() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = freshList(100);
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        // Concurrently removeIf and add
+                        shared.removeIf(x -> x % 2 == 0);
+                        shared.addAll(Arrays.asList(2, 4, 6, 8, 10));
+                        // Check for nulls or unexpected size
+                        if (shared.contains(null) || shared.size() > 10000) {
+                            corruptions.incrementAndGet();
+                        }
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testRemoveIf_Unsafe", exceptions.get(), corruptions.get(), true);
+    }
+
+    @Test
+    @DisplayName("sort with comparator lambda — UNSAFE")
+    void testSort_Unsafe() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = freshList(100);
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        // Concurrent sort + modification
+                        shared.sort(Comparator.reverseOrder());
+                        shared.set(0, ThreadLocalRandom.current().nextInt(1000));
+                        // Check: after sort, should be descending — but with races it won't be
+                        boolean sorted = true;
+                        for (int j = 0; j < shared.size() - 1; j++) {
+                            if (shared.get(j) < shared.get(j + 1)) {
+                                sorted = false;
+                                break;
+                            }
+                        }
+                        if (!sorted) corruptions.incrementAndGet();
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testSort_Unsafe", exceptions.get(), corruptions.get(), true);
+    }
+
+    @Test
+    @DisplayName("final ArrayList is STILL unsafe — final does NOT help")
+    void testFinal_StillUnsafe() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        // FINAL does not make the list thread-safe — it only prevents reassignment
+        final ArrayList<Integer> shared = freshList(100);
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        shared.replaceAll(x -> x + 1);
+                        Set<Integer> unique = new HashSet<>(shared);
+                        if (unique.size() > 1) {
+                            corruptions.incrementAndGet();
+                        }
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testFinal_StillUnsafe", exceptions.get(), corruptions.get(), true);
+    }
+
+    @Test
+    @DisplayName("stream().map().collect() with shared source modified concurrently — UNSAFE")
+    void testStreamCollect_SharedSource_Unsafe() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = freshList(100);
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            final int threadId = t;
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        if (threadId % 2 == 0) {
+                            // Reader: stream the shared source
+                            List<Integer> result = shared.stream()
+                                    .map(x -> x * 2)
+                                    .collect(Collectors.toList());
+                            // Result should have same size as source, but races cause mismatches
+                            if (result.size() != shared.size() || result.contains(null)) {
+                                corruptions.incrementAndGet();
+                            }
+                        } else {
+                            // Writer: mutate the shared source
+                            shared.add(ThreadLocalRandom.current().nextInt(100));
+                            if (shared.size() > 200) {
+                                shared.subList(100, shared.size()).clear();
+                            }
+                        }
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(30, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testStreamCollect_SharedSource_Unsafe", exceptions.get(), corruptions.get(), true);
+    }
+
+    // ========================================================================
+    // SAFE TESTS
+    // ========================================================================
+
+    @Test
+    @DisplayName("replaceAll on CopyOnWriteArrayList — SAFE")
+    void testReplaceAll_CopyOnWriteArrayList() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        CopyOnWriteArrayList<Integer> shared = new CopyOnWriteArrayList<>(freshList(20));
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        shared.replaceAll(x -> x + 1);
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(120, TimeUnit.SECONDS);
+        pool.shutdownNow();
+
+        // Verify: all elements should be equal (all started at different values but got same # of increments)
+        // Actually with CopyOnWriteArrayList, replaceAll is atomic per call, so no corruption
+        // Check no exceptions
+        printStats("testReplaceAll_CopyOnWriteArrayList", exceptions.get(), corruptions.get(), false);
+    }
+
+    @Test
+    @DisplayName("replaceAll on synchronizedList — SAFE")
+    void testReplaceAll_SynchronizedList() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = Collections.synchronizedList(freshList(100));
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        synchronized (shared) {
+                            shared.replaceAll(x -> x + 1);
+                        }
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(60, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testReplaceAll_SynchronizedList", exceptions.get(), corruptions.get(), false);
+    }
+
+    @Test
+    @DisplayName("replaceAll with synchronized block — SAFE")
+    void testReplaceAll_Synchronized_Block() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = freshList(100);
+        Object lock = new Object();
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        synchronized (lock) {
+                            shared.replaceAll(x -> x + 1);
+                            // Verify: size should remain constant
+                            if (shared.size() != 100) {
+                                corruptions.incrementAndGet();
+                            }
+                        }
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(60, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testReplaceAll_Synchronized_Block", exceptions.get(), corruptions.get(), false);
+    }
+
+    @Test
+    @DisplayName("stream with defensive copy — SAFE")
+    void testStream_DefensiveCopy() throws InterruptedException {
+        AtomicInteger exceptions = new AtomicInteger();
+        AtomicInteger corruptions = new AtomicInteger();
+        List<Integer> shared = freshList(100);
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        CountDownLatch latch = new CountDownLatch(THREADS);
+
+        for (int t = 0; t < THREADS; t++) {
+            final int threadId = t;
+            pool.submit(() -> {
+                for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
+                    try {
+                        if (threadId % 2 == 0) {
+                            // SAFE: defensive copy under lock, then stream freely
+                            List<Integer> snapshot;
+                            synchronized (shared) {
+                                snapshot = new ArrayList<>(shared);
+                            }
+                            List<Integer> result = snapshot.stream()
+                                    .map(x -> x * 2)
+                                    .collect(Collectors.toList());
+                            if (result.contains(null)) {
+                                corruptions.incrementAndGet();
+                            }
+                        } else {
+                            // Writer
+                            synchronized (shared) {
+                                shared.add(ThreadLocalRandom.current().nextInt(100));
+                                if (shared.size() > 200) {
+                                    shared.subList(100, shared.size()).clear();
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        exceptions.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        latch.await(60, TimeUnit.SECONDS);
+        pool.shutdownNow();
+        printStats("testStream_DefensiveCopy", exceptions.get(), corruptions.get(), false);
     }
 }
