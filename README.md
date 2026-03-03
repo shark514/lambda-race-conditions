@@ -48,7 +48,7 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | ReplaceAllUnsafe       | 5.00% | 0.40%  | 0.16%    | **5.37%** |
 | FinalReplaceAll        | 5.00% | 0.30%  | 0.19%    | **6.51%** |
 | DefensiveCopy          | 0.00% | 0.20%  | 0.17%    | **1.06%** |
-| DefensiveCopyReturn    | 100%  | 100%   | 100%     | **100%**  |
+| DefensiveCopyReturn    | 0.00% | 0.00%  | 0.00%    | **0.00%** |
 | SynchronizedList       | 0.00% | 0.00%  | 0.00%    | **0.00%** |
 | CopyOnWriteArrayList   | 0.00% | 0.00%  | 0.00%    | **0.00%** |
 
@@ -87,14 +87,14 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | 100,000 | 98,939  | 1,061| 0          | 63,416      | 100,000  | **36,584**      |
 
 #### DefensiveCopyReturn
-| Hits    | OK      | Lost    | Exceptions | Final value | Expected | Lost increments |
-|---------|---------|---------|------------|-------------|----------|-----------------|
-| 100     | 0       | 100     | 0          | 0           | 100      | 100             |
-| 1,000   | 0       | 1,000   | 0          | 0           | 1,000    | 1,000           |
-| 10,000  | 0       | 10,000  | 0          | 0           | 10,000   | 10,000          |
-| 100,000 | 0       | 100,000 | 0          | 0           | 100,000  | **100,000**     |
+| Hits    | OK      | Lost | Exceptions | Loss Rate |
+|---------|---------|------|------------|-----------|
+| 100     | 100     | 0    | 0          | 0.00%     |
+| 1,000   | 1,000   | 0    | 0          | 0.00%     |
+| 10,000  | 10,000  | 0    | 0          | 0.00%     |
+| 100,000 | 100,000 | 0    | 0          | **0.00%** |
 
-100% loss at every level. Not a single increment reaches the shared list. Each thread copies, increments its copy, and discards it — the shared list stays at 0 forever. Zero collisions, zero exceptions, zero corruption — but also zero shared progress. This is complete isolation: the threads never interfere with each other because they never touch the shared state.
+0% loss. Every returned copy is correct — each element equals original + 1. Zero collisions, zero exceptions, zero corruption. Each thread works on its own copy and returns it; threads never interfere with each other because they never touch the shared state.
 
 #### SynchronizedList
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
@@ -120,7 +120,7 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 - **ReplaceAllUnsafe**: The `replaceAll` lambda loses ~5% + generates `ConcurrentModificationException`. The worst of both worlds.
 - **FinalReplaceAll**: `final` doesn't help — ~6.5% error rate at 100K. The reference is frozen, **not the content**.
 - **DefensiveCopy**: Low error rate (1%) but **massive lost increments** (36,584 at 100K). Each thread copies, transforms, then overwrites the original — but meanwhile, other threads have also overwritten it. The copy-back (`Collections.copy`) is the bug.
-- **DefensiveCopyReturn**: **100% loss** — not a single increment lands on the shared list. Each thread works on its own copy and discards it. Zero collisions, zero corruption, total isolation. This is what "correct" defensive copy actually does: it eliminates all interference by eliminating all shared mutation.
+- **DefensiveCopyReturn**: **0% loss** — every returned copy is correct. Each thread copies, increments, returns. No thread touches the shared state, so there's nothing to collide on. Total isolation = zero collisions.
 - **SynchronizedList**: **0% losses**. The `synchronized(list)` block guarantees atomicity of each operation.
 - **CopyOnWriteArrayList**: **0% losses**. Internal locking protects each mutation.
 
@@ -187,11 +187,11 @@ Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss*
 | replaceAll | | 5.37% | ConcurrentModificationException + losses |
 | final + replaceAll | | 6.51% | `final` = immutable reference, not content |
 | Defensive copy (write-back) | | 1.06% | Copy-back overwrites other threads' work |
-| Defensive copy (return) | -- | 100% | Total isolation — zero shared mutation |
+| Defensive copy (return) | -- | 0.00% | Total isolation — every copy correct |
 | synchronizedList | | 0.00% | Explicit lock = atomicity |
 | CopyOnWriteArrayList | | 0.00% | Internal locking |
 
-**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back causes **massive silent data loss** (36K lost increments at 100K). Defensive copy with return gives **100% isolation** — zero collisions, but also zero shared progress. Pick your poison — or just synchronize.
+**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back causes **massive silent data loss** (36K lost increments at 100K). Defensive copy with return gives **0% loss** (total isolation), but never mutates shared state — useless if you need shared progress. Pick your poison — or just synchronize.
 
 ## Project Structure
 
