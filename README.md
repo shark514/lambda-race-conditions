@@ -48,9 +48,10 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | ReplaceAllUnsafe       | 11.00%   | 1.00%      | 2.69%       | **34.37%**   |
 | FinalReplaceAll        | 0.00%    | 0.40%      | 1.96%       | **14.83%**   |
 | DefensiveCopy          | 44.00%   | 30.20%     | 56.21%      | **64.35%**   |
-| DefensiveCopyReturn 🧊 | 100.00%  | 100.00%    | 100.00%     | **100.00%**  |
 | SynchronizedList       | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 | CopyOnWriteArrayList   | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
+
+> 🧊 **DefensiveCopyReturn** is intentionally excluded from this table. It doesn't compete — it proves a different point: true defensive copy **never modifies shared state**. Zero collisions, zero corruption, zero shared mutation. See [scenario 5](#5-defensivecopyreturn---true-defensive-copy-return-dont-write-back) for details.
 
 ### Detailed results per scenario
 
@@ -86,15 +87,18 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | 10,000  | 9,982   | 18   | 0          | 9,121       | 10,000   | 879             |
 | 100,000 | 99,432  | 568  | 0          | 67,807      | 100,000  | **32,193**      |
 
-#### DefensiveCopyReturn 🧊
-| Hits    | Shared final | Expected | Shared loss |
-|---------|-------------|----------|-------------|
-| 100     | 0           | 100      | **100.00%** |
-| 1,000   | 0           | 1,000    | **100.00%** |
-| 10,000  | 0           | 10,000   | **100.00%** |
-| 100,000 | 0           | 100,000  | **100.00%** |
+#### DefensiveCopyReturn 🧊 *(not a loss — by design)*
 
-The "correct" defensive copy: each thread copies, increments, returns — **never writes back**. The shared list stays at 0 forever. Zero corruption, zero shared mutation. This proves that true defensive copy = **total isolation** from shared state.
+This scenario is **not comparable** to the others. It doesn't measure collision loss — it demonstrates that true defensive copy **never touches shared state**.
+
+Each thread: copies → increments → **returns the copy**. The shared list stays at 0. That's not a bug, that's the point.
+
+- ✅ Zero collisions
+- ✅ Zero corruption
+- ✅ Zero `ConcurrentModificationException`
+- ❌ Zero shared mutation (by design)
+
+**Conclusion**: If you need shared mutation, defensive copy is the wrong pattern. If you don't need shared mutation, defensive copy is perfect — but then you don't have a concurrency problem in the first place.
 
 #### SynchronizedList ✅
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
@@ -187,7 +191,7 @@ Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss*
 | replaceAll | ❌ | 34.37% | ConcurrentModificationException + losses |
 | final + replaceAll | ❌ | 14.83% | `final` = immutable reference, not content |
 | Defensive copy | ❌ | 64.35% | Copy-back overwrites other threads' work |
-| Defensive copy return | 🧊 | 100.00% | Correct isolation but shared state untouched |
+| Defensive copy return | 🧊 | N/A | Correct isolation — no shared mutation by design |
 | synchronizedList | ✅ | 0.00% | Explicit lock = atomicity |
 | CopyOnWriteArrayList | ✅ | 0.00% | Internal locking |
 
