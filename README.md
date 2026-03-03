@@ -44,13 +44,13 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 
 | Scenario               | 100 hits | 1,000 hits | 10,000 hits | 100,000 hits |
 |------------------------|----------|------------|-------------|--------------|
-| BaselineForLoop        | ✅ 0.00% | ✅ 0.00%  | ❌ 0.01%    | ❌ **0.14%** |
-| ReplaceAllUnsafe       | ❌ 5.00% | ❌ 0.40%  | ❌ 0.16%    | ❌ **5.37%** |
-| FinalReplaceAll        | ❌ 5.00% | ❌ 0.30%  | ❌ 0.19%    | ❌ **6.51%** |
-| DefensiveCopy          | ✅ 0.00% | ❌ 0.20%  | ❌ 0.17%    | ❌ **1.06%** |
-| DefensiveCopyReturn    | ❌ 100%  | ❌ 100%   | ❌ 100%     | ❌ **100%**  |
-| SynchronizedList       | ✅ 0.00% | ✅ 0.00%  | ✅ 0.00%    | ✅ **0.00%** |
-| CopyOnWriteArrayList   | ✅ 0.00% | ✅ 0.00%  | ✅ 0.00%    | ✅ **0.00%** |
+| BaselineForLoop        | 0.00% | 0.00%  | 0.01%    | **0.14%** |
+| ReplaceAllUnsafe       | 5.00% | 0.40%  | 0.16%    | **5.37%** |
+| FinalReplaceAll        | 5.00% | 0.30%  | 0.19%    | **6.51%** |
+| DefensiveCopy          | 0.00% | 0.20%  | 0.17%    | **1.06%** |
+| DefensiveCopyReturn    | 100%  | 100%   | 100%     | **100%**  |
+| SynchronizedList       | 0.00% | 0.00%  | 0.00%    | **0.00%** |
+| CopyOnWriteArrayList   | 0.00% | 0.00%  | 0.00%    | **0.00%** |
 
 ### Detailed results per scenario
 
@@ -96,7 +96,7 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 
 Every hit is "lost" because no thread ever writes back to the shared list. Zero exceptions, zero corruption — but zero shared progress. The copy works perfectly in isolation; the shared state is simply never touched.
 
-#### SynchronizedList ✅
+#### SynchronizedList
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
 | 100     | 100     | 0    | 0          | 100         | 100      | 0               |
@@ -104,7 +104,7 @@ Every hit is "lost" because no thread ever writes back to the shared list. Zero 
 | 10,000  | 10,000  | 0    | 0          | 10,000      | 10,000   | 0               |
 | 100,000 | 100,000 | 0    | 0          | 100,000     | 100,000  | **0**           |
 
-#### CopyOnWriteArrayList ✅
+#### CopyOnWriteArrayList
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
 | 100     | 100     | 0    | 0          | 100         | 100      | 0               |
@@ -183,13 +183,13 @@ Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss*
 
 | Approach | Safe? | Loss rate @ 100K | Why |
 |----------|-------|-------------------|-----|
-| for loop | ❌ | 0.14% | Non-atomic read-modify-write |
-| replaceAll | ❌ | 5.37% | ConcurrentModificationException + losses |
-| final + replaceAll | ❌ | 6.51% | `final` = immutable reference, not content |
-| Defensive copy (write-back) | ❌ | 1.06% | Copy-back overwrites other threads' work |
-| Defensive copy (return) | ❌ | 100% | No shared mutation — total isolation |
-| synchronizedList | ✅ | 0.00% | Explicit lock = atomicity |
-| CopyOnWriteArrayList | ✅ | 0.00% | Internal locking |
+| for loop | | 0.14% | Non-atomic read-modify-write |
+| replaceAll | | 5.37% | ConcurrentModificationException + losses |
+| final + replaceAll | | 6.51% | `final` = immutable reference, not content |
+| Defensive copy (write-back) | | 1.06% | Copy-back overwrites other threads' work |
+| Defensive copy (return) | | 100% | No shared mutation — total isolation |
+| synchronizedList | | 0.00% | Explicit lock = atomicity |
+| CopyOnWriteArrayList | | 0.00% | Internal locking |
 
 **Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back causes **massive silent data loss** (36K lost increments at 100K). Defensive copy with return is **correct but useless** for shared mutation (100% loss). Pick your poison — or just synchronize.
 
