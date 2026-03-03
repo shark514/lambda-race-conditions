@@ -1,6 +1,6 @@
 # Lambda Race Conditions — Demonstration
 
-This project demonstrates **race conditions** that occur when multiple threads manipulate an `ArrayList` in parallel. 7 approaches are compared: classic for loop, `replaceAll` with lambda, `final` variable, defensive copy, **defensive copy with return**, `synchronizedList`, and `CopyOnWriteArrayList`.
+This project demonstrates **race conditions** that occur when multiple threads manipulate an `ArrayList` in parallel. 7 approaches are compared: classic for loop, `replaceAll` with lambda, `final` variable, defensive copy (write-back), **defensive copy (return)**, `synchronizedList`, and `CopyOnWriteArrayList`.
 
 Each scenario does exactly the same thing: **50 threads simultaneously increment each element of a list**. The only difference = the method used. At the end, we compare the obtained value vs the expected value. The difference = increments lost due to collisions.
 
@@ -44,61 +44,57 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 
 | Scenario               | 100 hits | 1,000 hits | 10,000 hits | 100,000 hits |
 |------------------------|----------|------------|-------------|--------------|
-| BaselineForLoop        | 1.00%    | 1.80%      | 20.60%      | **53.83%**   |
-| ReplaceAllUnsafe       | 11.00%   | 1.00%      | 2.69%       | **34.37%**   |
-| FinalReplaceAll        | 0.00%    | 0.40%      | 1.96%       | **14.83%**   |
-| DefensiveCopy          | 44.00%   | 30.20%     | 56.21%      | **64.35%**   |
-| SynchronizedList       | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
-| CopyOnWriteArrayList   | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
-
-> 🧊 **DefensiveCopyReturn** is intentionally excluded from this table. It doesn't compete — it proves a different point: true defensive copy **never modifies shared state**. Zero collisions, zero corruption, zero shared mutation. See [scenario 5](#5-defensivecopyreturn---true-defensive-copy-return-dont-write-back) for details.
+| BaselineForLoop        | ✅ 0.00% | ✅ 0.00%  | ❌ 0.01%    | ❌ **0.14%** |
+| ReplaceAllUnsafe       | ❌ 5.00% | ❌ 0.40%  | ❌ 0.16%    | ❌ **5.37%** |
+| FinalReplaceAll        | ❌ 5.00% | ❌ 0.30%  | ❌ 0.19%    | ❌ **6.51%** |
+| DefensiveCopy          | ✅ 0.00% | ❌ 0.20%  | ❌ 0.17%    | ❌ **1.06%** |
+| DefensiveCopyReturn    | ❌ 100%  | ❌ 100%   | ❌ 100%     | ❌ **100%**  |
+| SynchronizedList       | ✅ 0.00% | ✅ 0.00%  | ✅ 0.00%    | ✅ **0.00%** |
+| CopyOnWriteArrayList   | ✅ 0.00% | ✅ 0.00%  | ✅ 0.00%    | ✅ **0.00%** |
 
 ### Detailed results per scenario
 
 #### BaselineForLoop
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 100     | 0    | 0          | 100         | 100      | 0               |
-| 1,000   | 1,000   | 0    | 0          | 931         | 1,000    | 69              |
-| 10,000  | 9,999   | 1    | 0          | 9,262       | 10,000   | 738             |
-| 100,000 | 99,823  | 177  | 0          | 92,807      | 100,000  | **7,193**       |
+| 100     | 100     | 0    | 0          | 99          | 100      | 1               |
+| 1,000   | 1,000   | 0    | 0          | 977         | 1,000    | 23              |
+| 10,000  | 9,999   | 1    | 0          | 8,372       | 10,000   | 1,628           |
+| 100,000 | 99,856  | 144  | 0          | 87,228      | 100,000  | **12,772**      |
 
 #### ReplaceAllUnsafe
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 97      | 0    | 3          | 99          | 100      | 1               |
-| 1,000   | 987     | 0    | 13         | 993         | 1,000    | 7               |
-| 10,000  | 9,987   | 0    | 13         | 9,994       | 10,000   | 6               |
-| 100,000 | 90,956  | 137  | 8,907      | 88,132      | 100,000  | **11,868**      |
+| 100     | 95      | 0    | 5          | 99          | 100      | 1               |
+| 1,000   | 996     | 0    | 4          | 999         | 1,000    | 1               |
+| 10,000  | 9,984   | 0    | 16         | 9,984       | 10,000   | 16              |
+| 100,000 | 94,630  | 135  | 5,235      | 92,585      | 100,000  | **7,415**       |
 
 #### FinalReplaceAll
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 98      | 0    | 2          | 98          | 100      | 2               |
-| 1,000   | 991     | 0    | 9          | 978         | 1,000    | 22              |
-| 10,000  | 9,983   | 0    | 17         | 9,987       | 10,000   | 13              |
-| 100,000 | 87,987  | 87   | 11,926     | 84,781      | 100,000  | **15,219**      |
+| 100     | 95      | 0    | 5          | 96          | 100      | 4               |
+| 1,000   | 997     | 0    | 3          | 987         | 1,000    | 13              |
+| 10,000  | 9,981   | 0    | 19         | 9,967       | 10,000   | 33              |
+| 100,000 | 93,495  | 202  | 6,303      | 95,690      | 100,000  | **4,310**       |
 
 #### DefensiveCopy
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 100     | 0    | 0          | 80          | 100      | 20              |
-| 1,000   | 999     | 1    | 0          | 965         | 1,000    | 35              |
-| 10,000  | 9,982   | 18   | 0          | 9,121       | 10,000   | 879             |
-| 100,000 | 99,432  | 568  | 0          | 67,807      | 100,000  | **32,193**      |
+| 100     | 100     | 0    | 0          | 92          | 100      | 8               |
+| 1,000   | 998     | 2    | 0          | 817         | 1,000    | 183             |
+| 10,000  | 9,983   | 17   | 0          | 9,299       | 10,000   | 701             |
+| 100,000 | 98,939  | 1,061| 0          | 63,416      | 100,000  | **36,584**      |
 
-#### DefensiveCopyReturn 🧊 *(the correct defensive copy)*
+#### DefensiveCopyReturn
+| Hits    | OK      | Lost    | Exceptions | Final value | Expected | Lost increments |
+|---------|---------|---------|------------|-------------|----------|-----------------|
+| 100     | 0       | 100     | 0          | 0           | 100      | 100             |
+| 1,000   | 0       | 1,000   | 0          | 0           | 1,000    | 1,000           |
+| 10,000  | 0       | 10,000  | 0          | 0           | 10,000   | 10,000          |
+| 100,000 | 0       | 100,000 | 0          | 0           | 100,000  | **100,000**     |
 
-| Hits    | Collisions | Corruption | Exceptions | Each thread's copy correct? |
-|---------|-----------|------------|------------|----------------------------|
-| 100     | 0         | 0          | 0          | ✅ YES (sum = 100)          |
-| 1,000   | 0         | 0          | 0          | ✅ YES (sum = 1,000)        |
-| 10,000  | 0         | 0          | 0          | ✅ YES (sum = 10,000)       |
-| 100,000 | 0         | 0          | 0          | ✅ YES (sum = 100,000)      |
-
-**Zero collisions. Zero corruption. Zero exceptions.** Every thread works on its own copy and returns it. The shared list is never touched — that's not a bug, that's the point.
-
-This is what defensive copy **actually means**: isolation. If you need shared mutation, it's the wrong pattern. If you don't, it's perfect.
+Every hit is "lost" because no thread ever writes back to the shared list. Zero exceptions, zero corruption — but zero shared progress. The copy works perfectly in isolation; the shared state is simply never touched.
 
 #### SynchronizedList ✅
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
@@ -120,15 +116,15 @@ This is what defensive copy **actually means**: isolation. If you need shared mu
 
 ### What the results show
 
-- **BaselineForLoop**: The classic `for` loop loses >50% of increments at 100K hits. The read-modify-write (`get` → `+1` → `set`) is not atomic.
-- **ReplaceAllUnsafe**: The `replaceAll` lambda loses ~34% + generates `ConcurrentModificationException`. The worst of both worlds.
-- **FinalReplaceAll**: `final` *apparently* reduces losses (~15% vs ~34%) but this is a false sense of security. The reference is frozen, **not the content**.
-- **DefensiveCopy**: The WORST *unsafe* approach (~64% losses!). Each thread copies the list, transforms it, then overwrites the original — but meanwhile, other threads have also overwritten it. Cascading lost updates. The copy-back (`Collections.copy`) is the bug.
-- **DefensiveCopyReturn** 🧊: The "correct" defensive copy — copy, transform, **return without writing back**. Result: 100% loss on shared state because nobody writes. Proves that true defensive copy = **total isolation**. If you need shared mutation, defensive copy is simply the wrong pattern.
+- **BaselineForLoop**: The classic `for` loop loses >12% of increments at 100K hits. The read-modify-write (`get` → `+1` → `set`) is not atomic.
+- **ReplaceAllUnsafe**: The `replaceAll` lambda loses ~5% + generates `ConcurrentModificationException`. The worst of both worlds.
+- **FinalReplaceAll**: `final` doesn't help — ~6.5% error rate at 100K. The reference is frozen, **not the content**.
+- **DefensiveCopy**: Low error rate (1%) but **massive lost increments** (36,584 at 100K). Each thread copies, transforms, then overwrites the original — but meanwhile, other threads have also overwritten it. The copy-back (`Collections.copy`) is the bug.
+- **DefensiveCopyReturn**: **100% loss at every level**. Each thread copies, transforms, returns — and never touches the shared list. `list[0]` stays at 0 forever. Zero corruption, but zero progress. This is what defensive copy *actually means*: total isolation from shared state.
 - **SynchronizedList**: **0% losses**. The `synchronized(list)` block guarantees atomicity of each operation.
 - **CopyOnWriteArrayList**: **0% losses**. Internal locking protects each mutation.
 
-## The 6 Scenarios
+## The 7 Scenarios
 
 ### 1. BaselineForLoop — Classic `for` loop (no lambda)
 ```java
@@ -151,21 +147,21 @@ list.replaceAll(x -> x + 1);
 ```
 The `final` keyword prevents reassigning the `list` variable. But it provides **absolutely no protection** for the list's content. The race conditions are the same.
 
-### 4. DefensiveCopy — Defensive copy
+### 4. DefensiveCopy — Defensive copy (write-back)
 ```java
 ArrayList<Integer> copy = new ArrayList<>(list);
 copy.replaceAll(x -> x + 1);
 Collections.copy(list, copy);
 ```
-Each thread works on its own copy — no exception. But when it overwrites the original list with its copy, it also overwrites the modifications from other threads. Result: **the worst loss rate of all scenarios**.
+Each thread works on its own copy — no exception. But when it overwrites the original list with its copy, it also overwrites the modifications from other threads. Result: **massive lost increments** (36,584 at 100K).
 
-### 5. DefensiveCopyReturn 🧊 — True defensive copy (return, don't write back)
+### 5. DefensiveCopyReturn — Defensive copy (return, don't write back)
 ```java
 ArrayList<Integer> copy = new ArrayList<>(list);
 copy.replaceAll(x -> x + 1);
 return copy; // never touch the original
 ```
-This is what defensive copy **actually means**: work on your own copy, return it, never modify the shared state. The shared list stays at 0 forever — **100% "loss"** from the shared perspective, but **zero corruption**. This exposes the fundamental contradiction: if you need to mutate shared state, defensive copy is the wrong tool.
+This is what defensive copy **actually means**: work on your own copy, return it, never modify the shared state. The shared list stays at 0 forever — **100% loss**. Each thread's copy is perfect (1 increment), but none of it reaches the shared list. This exposes the fundamental contradiction: if you need to mutate shared state, defensive copy is the wrong tool.
 
 ### 6. SynchronizedList — `synchronized` + `Collections.synchronizedList()`
 ```java
@@ -187,15 +183,15 @@ Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss*
 
 | Approach | Safe? | Loss rate @ 100K | Why |
 |----------|-------|-------------------|-----|
-| for loop | ❌ | 53.83% | Non-atomic read-modify-write |
-| replaceAll | ❌ | 34.37% | ConcurrentModificationException + losses |
-| final + replaceAll | ❌ | 14.83% | `final` = immutable reference, not content |
-| Defensive copy | ❌ | 64.35% | Copy-back overwrites other threads' work |
-| Defensive copy return | 🧊 | N/A | Correct isolation — no shared mutation by design |
+| for loop | ❌ | 0.14% | Non-atomic read-modify-write |
+| replaceAll | ❌ | 5.37% | ConcurrentModificationException + losses |
+| final + replaceAll | ❌ | 6.51% | `final` = immutable reference, not content |
+| Defensive copy (write-back) | ❌ | 1.06% | Copy-back overwrites other threads' work |
+| Defensive copy (return) | ❌ | 100% | No shared mutation — total isolation |
 | synchronizedList | ✅ | 0.00% | Explicit lock = atomicity |
 | CopyOnWriteArrayList | ✅ | 0.00% | Internal locking |
 
-**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back is the **worst approach** (64% loss). Defensive copy with return is **correct but useless** for shared mutation (100% loss). Pick your poison — or just synchronize.
+**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back causes **massive silent data loss** (36K lost increments at 100K). Defensive copy with return is **correct but useless** for shared mutation (100% loss). Pick your poison — or just synchronize.
 
 ## Project Structure
 
