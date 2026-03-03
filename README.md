@@ -87,18 +87,18 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | 10,000  | 9,982   | 18   | 0          | 9,121       | 10,000   | 879             |
 | 100,000 | 99,432  | 568  | 0          | 67,807      | 100,000  | **32,193**      |
 
-#### DefensiveCopyReturn 🧊 *(not a loss — by design)*
+#### DefensiveCopyReturn 🧊 *(the correct defensive copy)*
 
-This scenario is **not comparable** to the others. It doesn't measure collision loss — it demonstrates that true defensive copy **never touches shared state**.
+| Hits    | Collisions | Corruption | Exceptions | Each thread's copy correct? |
+|---------|-----------|------------|------------|----------------------------|
+| 100     | 0         | 0          | 0          | ✅ YES (sum = 100)          |
+| 1,000   | 0         | 0          | 0          | ✅ YES (sum = 1,000)        |
+| 10,000  | 0         | 0          | 0          | ✅ YES (sum = 10,000)       |
+| 100,000 | 0         | 0          | 0          | ✅ YES (sum = 100,000)      |
 
-Each thread: copies → increments → **returns the copy**. The shared list stays at 0. That's not a bug, that's the point.
+**Zero collisions. Zero corruption. Zero exceptions.** Every thread works on its own copy and returns it. The shared list is never touched — that's not a bug, that's the point.
 
-- ✅ Zero collisions
-- ✅ Zero corruption
-- ✅ Zero `ConcurrentModificationException`
-- ❌ Zero shared mutation (by design)
-
-**Conclusion**: If you need shared mutation, defensive copy is the wrong pattern. If you don't need shared mutation, defensive copy is perfect — but then you don't have a concurrency problem in the first place.
+This is what defensive copy **actually means**: isolation. If you need shared mutation, it's the wrong pattern. If you don't, it's perfect.
 
 #### SynchronizedList ✅
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
