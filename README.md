@@ -1,6 +1,6 @@
 # Lambda Race Conditions — Demonstration
 
-This project demonstrates **race conditions** that occur when multiple threads manipulate an `ArrayList` in parallel. 6 approaches are compared: classic for loop, `replaceAll` with lambda, `final` variable, defensive copy, `synchronizedList`, and `CopyOnWriteArrayList`.
+This project demonstrates **race conditions** that occur when multiple threads manipulate an `ArrayList` in parallel. 7 approaches are compared: classic for loop, `replaceAll` with lambda, `final` variable, defensive copy, **defensive copy with return**, `synchronizedList`, and `CopyOnWriteArrayList`.
 
 Each scenario does exactly the same thing: **50 threads simultaneously increment each element of a list**. The only difference = the method used. At the end, we compare the obtained value vs the expected value. The difference = increments lost due to collisions.
 
@@ -15,6 +15,7 @@ mvn test -Dtest=com.epns.lambda.scenarios.BaselineForLoopTest
 mvn test -Dtest=com.epns.lambda.scenarios.ReplaceAllUnsafeTest
 mvn test -Dtest=com.epns.lambda.scenarios.FinalReplaceAllTest
 mvn test -Dtest=com.epns.lambda.scenarios.DefensiveCopyTest
+mvn test -Dtest=com.epns.lambda.scenarios.DefensiveCopyReturnTest
 mvn test -Dtest=com.epns.lambda.scenarios.SynchronizedListTest
 mvn test -Dtest=com.epns.lambda.scenarios.CopyOnWriteArrayListTest
 ```
@@ -47,6 +48,7 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | ReplaceAllUnsafe       | 11.00%   | 1.00%      | 2.69%       | **34.37%**   |
 | FinalReplaceAll        | 0.00%    | 0.40%      | 1.96%       | **14.83%**   |
 | DefensiveCopy          | 44.00%   | 30.20%     | 56.21%      | **64.35%**   |
+| DefensiveCopyReturn 🧊 | 100.00%  | 100.00%    | 100.00%     | **100.00%**  |
 | SynchronizedList       | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 | CopyOnWriteArrayList   | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 
@@ -84,6 +86,16 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | 10,000  | 9,982   | 18   | 0          | 9,121       | 10,000   | 879             |
 | 100,000 | 99,432  | 568  | 0          | 67,807      | 100,000  | **32,193**      |
 
+#### DefensiveCopyReturn 🧊
+| Hits    | Shared final | Expected | Shared loss |
+|---------|-------------|----------|-------------|
+| 100     | 0           | 100      | **100.00%** |
+| 1,000   | 0           | 1,000    | **100.00%** |
+| 10,000  | 0           | 10,000   | **100.00%** |
+| 100,000 | 0           | 100,000  | **100.00%** |
+
+The "correct" defensive copy: each thread copies, increments, returns — **never writes back**. The shared list stays at 0 forever. Zero corruption, zero shared mutation. This proves that true defensive copy = **total isolation** from shared state.
+
 #### SynchronizedList ✅
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
@@ -107,7 +119,8 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 - **BaselineForLoop**: The classic `for` loop loses >50% of increments at 100K hits. The read-modify-write (`get` → `+1` → `set`) is not atomic.
 - **ReplaceAllUnsafe**: The `replaceAll` lambda loses ~34% + generates `ConcurrentModificationException`. The worst of both worlds.
 - **FinalReplaceAll**: `final` *apparently* reduces losses (~15% vs ~34%) but this is a false sense of security. The reference is frozen, **not the content**.
-- **DefensiveCopy**: The WORST approach (~64% losses!). Each thread copies the list, transforms it, then overwrites the original — but meanwhile, other threads have also overwritten it. Cascading lost updates.
+- **DefensiveCopy**: The WORST *unsafe* approach (~64% losses!). Each thread copies the list, transforms it, then overwrites the original — but meanwhile, other threads have also overwritten it. Cascading lost updates. The copy-back (`Collections.copy`) is the bug.
+- **DefensiveCopyReturn** 🧊: The "correct" defensive copy — copy, transform, **return without writing back**. Result: 100% loss on shared state because nobody writes. Proves that true defensive copy = **total isolation**. If you need shared mutation, defensive copy is simply the wrong pattern.
 - **SynchronizedList**: **0% losses**. The `synchronized(list)` block guarantees atomicity of each operation.
 - **CopyOnWriteArrayList**: **0% losses**. Internal locking protects each mutation.
 
@@ -142,7 +155,15 @@ Collections.copy(list, copy);
 ```
 Each thread works on its own copy — no exception. But when it overwrites the original list with its copy, it also overwrites the modifications from other threads. Result: **the worst loss rate of all scenarios**.
 
-### 5. SynchronizedList — `synchronized` + `Collections.synchronizedList()`
+### 5. DefensiveCopyReturn 🧊 — True defensive copy (return, don't write back)
+```java
+ArrayList<Integer> copy = new ArrayList<>(list);
+copy.replaceAll(x -> x + 1);
+return copy; // never touch the original
+```
+This is what defensive copy **actually means**: work on your own copy, return it, never modify the shared state. The shared list stays at 0 forever — **100% "loss"** from the shared perspective, but **zero corruption**. This exposes the fundamental contradiction: if you need to mutate shared state, defensive copy is the wrong tool.
+
+### 6. SynchronizedList — `synchronized` + `Collections.synchronizedList()`
 ```java
 List<Integer> list = Collections.synchronizedList(new ArrayList<>());
 synchronized (list) {
@@ -151,7 +172,7 @@ synchronized (list) {
 ```
 The `synchronized` lock makes each `replaceAll` atomic. **Zero loss**, but threads wait their turn (contention).
 
-### 6. CopyOnWriteArrayList
+### 7. CopyOnWriteArrayList
 ```java
 CopyOnWriteArrayList<Integer> list = new CopyOnWriteArrayList<>();
 list.replaceAll(x -> x + 1);
@@ -165,22 +186,24 @@ Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss*
 | for loop | ❌ | 53.83% | Non-atomic read-modify-write |
 | replaceAll | ❌ | 34.37% | ConcurrentModificationException + losses |
 | final + replaceAll | ❌ | 14.83% | `final` = immutable reference, not content |
-| Defensive copy | ❌ | 64.35% | Lost updates — the worst approach |
+| Defensive copy | ❌ | 64.35% | Copy-back overwrites other threads' work |
+| Defensive copy return | 🧊 | 100.00% | Correct isolation but shared state untouched |
 | synchronizedList | ✅ | 0.00% | Explicit lock = atomicity |
 | CopyOnWriteArrayList | ✅ | 0.00% | Internal locking |
 
-**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient — and defensive copies are paradoxically **the worst approach**.
+**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back is the **worst approach** (64% loss). Defensive copy with return is **correct but useless** for shared mutation (100% loss). Pick your poison — or just synchronize.
 
 ## Project Structure
 
 ```
 src/test/java/com/epns/lambda/
-├── scenarios/          ← The 6 comparative scenarios
+├── scenarios/          ← The 7 comparative scenarios
 │   ├── ScenarioRunner.java
 │   ├── BaselineForLoopTest.java
 │   ├── ReplaceAllUnsafeTest.java
 │   ├── FinalReplaceAllTest.java
 │   ├── DefensiveCopyTest.java
+│   ├── DefensiveCopyReturnTest.java
 │   ├── SynchronizedListTest.java
 │   └── CopyOnWriteArrayListTest.java
 ├── unsafe/             ← Detailed unit tests (anomalies per hit)
