@@ -38,16 +38,16 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 
 ## Consolidated Results
 
-**Metric**: Loss rate = `(expected - obtained) / expected × 100`
+**Metric**: Collision rate = `(lost + exceptions) / total hits × 100`
 
 50 concurrent threads, list of 10 elements initialized to 0.
 
 | Scenario               | 100 hits | 1,000 hits | 10,000 hits | 100,000 hits |
 |------------------------|----------|------------|-------------|--------------|
-| BaselineForLoop        | 1.00%    | 7.60%      | 14.56%      | **36.55%**   |
-| ReplaceAllUnsafe       | 1.00%    | 0.40%      | 0.06%       | **5.36%**    |
-| FinalReplaceAll        | 1.00%    | 0.10%      | 0.01%       | **6.35%**    |
-| DefensiveCopy          | 12.00%   | 12.00%     | 21.46%      | **66.72%**   |
+| BaselineForLoop        | 0.00%    | 0.00%      | 0.08%       | **0.47%**    |
+| ReplaceAllUnsafe       | 5.00%    | 0.40%      | 0.21%       | **13.56%**   |
+| FinalReplaceAll        | 1.00%    | 0.60%      | 2.59%       | **15.72%**   |
+| DefensiveCopy          | 0.00%    | 0.50%      | 0.28%       | **0.31%**    |
 | DefensiveCopyReturn    | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 | SynchronizedList       | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
 | CopyOnWriteArrayList   | 0.00%    | 0.00%      | 0.00%       | **0.00%**    |
@@ -58,33 +58,33 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
 | 100     | 100     | 0    | 0          | 99          | 100      | 1               |
-| 1,000   | 1,000   | 0    | 0          | 924         | 1,000    | 76              |
-| 10,000  | 10,000  | 0    | 0          | 8,544       | 10,000   | 1,456           |
-| 100,000 | 99,856  | 144  | 0          | 63,455      | 100,000  | **36,545**      |
+| 1,000   | 1,000   | 0    | 0          | 975         | 1,000    | 25              |
+| 10,000  | 9,992   | 8    | 0          | 8,906       | 10,000   | 1,094           |
+| 100,000 | 99,535  | 465  | 0          | 68,880      | 100,000  | **31,120**      |
 
 #### ReplaceAllUnsafe
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 95      | 0    | 5          | 99          | 100      | 1               |
-| 1,000   | 996     | 0    | 4          | 996         | 1,000    | 4               |
-| 10,000  | 9,984   | 0    | 16         | 9,994       | 10,000   | 6               |
-| 100,000 | 94,630  | 135  | 5,235      | 94,644      | 100,000  | **5,356**       |
+| 100     | 95      | 0    | 5          | 100         | 100      | 0               |
+| 1,000   | 996     | 0    | 4          | 992         | 1,000    | 8               |
+| 10,000  | 9,979   | 0    | 21         | 9,988       | 10,000   | 12              |
+| 100,000 | 86,439  | 216  | 13,345     | 93,977      | 100,000  | **6,023**       |
 
 #### FinalReplaceAll
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 95      | 0    | 5          | 99          | 100      | 1               |
-| 1,000   | 997     | 0    | 3          | 999         | 1,000    | 1               |
-| 10,000  | 9,981   | 0    | 19         | 9,999       | 10,000   | 1               |
-| 100,000 | 93,495  | 202  | 6,303      | 93,647      | 100,000  | **6,353**       |
+| 100     | 99      | 0    | 1          | 89          | 100      | 11              |
+| 1,000   | 994     | 0    | 6          | 981         | 1,000    | 19              |
+| 10,000  | 9,741   | 3    | 256        | 9,976       | 10,000   | 24              |
+| 100,000 | 84,278  | 182  | 15,540     | 95,131      | 100,000  | **4,869**       |
 
 #### DefensiveCopy
 | Hits    | OK      | Lost | Exceptions | Final value | Expected | Lost increments |
 |---------|---------|------|------------|-------------|----------|-----------------|
-| 100     | 100     | 0    | 0          | 88          | 100      | 12              |
-| 1,000   | 998     | 2    | 0          | 880         | 1,000    | 120             |
-| 10,000  | 9,983   | 17   | 0          | 7,854       | 10,000   | 2,146           |
-| 100,000 | 98,939  | 1,061| 0          | 33,278      | 100,000  | **66,722**      |
+| 100     | 100     | 0    | 0          | 82          | 100      | 18              |
+| 1,000   | 995     | 5    | 0          | 928         | 1,000    | 72              |
+| 10,000  | 9,972   | 28   | 0          | 7,631       | 10,000   | 2,369           |
+| 100,000 | 99,688  | 312  | 0          | 64,978      | 100,000  | **35,022**      |
 
 #### DefensiveCopyReturn
 | Hits    | OK      | Lost | Exceptions | Loss Rate |
@@ -116,10 +116,10 @@ Without `-Dhits`, all 4 default levels run sequentially (100 → 1,000 → 10,00
 
 ### What the results show
 
-- **BaselineForLoop**: The classic `for` loop loses **36.55%** of increments at 100K hits. The read-modify-write (`get` → `+1` → `set`) is not atomic.
-- **ReplaceAllUnsafe**: The `replaceAll` lambda loses **5.36%** + generates `ConcurrentModificationException`. The worst of both worlds.
-- **FinalReplaceAll**: `final` doesn't help — **6.35%** loss at 100K. The reference is frozen, **not the content**.
-- **DefensiveCopy**: The WORST approach — **66.72% loss** at 100K. Each thread copies, transforms, then overwrites the original — but meanwhile, other threads have also overwritten it. Cascading lost updates.
+- **BaselineForLoop**: Low collision rate (0.47%) but massive silent data loss (31,120 lost increments at 100K). The `get` + `set` is not atomic — threads overwrite each other without knowing.
+- **ReplaceAllUnsafe**: **13.56%** collision rate at 100K. Generates `ConcurrentModificationException` because `replaceAll` checks `modCount`.
+- **FinalReplaceAll**: **15.72%** collision rate at 100K. `final` doesn't help — the reference is frozen, **not the content**.
+- **DefensiveCopy**: Low collision rate (0.31%) but **catastrophic silent data loss** (35,022 lost increments at 100K). Each thread copies, transforms, then overwrites the original — other threads' work disappears silently.
 - **DefensiveCopyReturn**: **0% loss** — every returned copy is correct. Each thread copies, increments, returns. No thread touches the shared state, so there's nothing to collide on. Total isolation = zero collisions.
 - **SynchronizedList**: **0% losses**. The `synchronized(list)` block guarantees atomicity of each operation.
 - **CopyOnWriteArrayList**: **0% losses**. Internal locking protects each mutation.
@@ -183,15 +183,15 @@ Each write creates an internal copy protected by a `ReentrantLock`. **Zero loss*
 
 | Approach | Safe? | Loss rate @ 100K | Why |
 |----------|-------|-------------------|-----|
-| for loop | Unsafe | 36.55% | Non-atomic read-modify-write |
-| replaceAll | Unsafe | 5.36% | ConcurrentModificationException + losses |
-| final + replaceAll | Unsafe | 6.35% | `final` = immutable reference, not content |
-| Defensive copy (write-back) | Unsafe | 66.72% | Copy-back overwrites other threads' work |
-| Defensive copy (return) | Safe | 0.00% | Total isolation — every copy correct |
-| synchronizedList | Safe | 0.00% | Explicit lock = atomicity |
-| CopyOnWriteArrayList | Safe | 0.00% | Internal locking |
+| for loop | Unsafe | 0.47% collision, 31% silent loss | Non-atomic read-modify-write |
+| replaceAll | Unsafe | 13.56% collision | ConcurrentModificationException + losses |
+| final + replaceAll | Unsafe | 15.72% collision | `final` = immutable reference, not content |
+| Defensive copy (write-back) | Unsafe | 0.31% collision, 35% silent loss | Copy-back overwrites other threads' work |
+| Defensive copy (return) | Safe | 0.00% collision | Total isolation — every copy correct |
+| synchronizedList | Safe | 0.00% collision | Explicit lock = atomicity |
+| CopyOnWriteArrayList | Safe | 0.00% collision | Internal locking |
 
-**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back is the **worst approach** (66.72% loss at 100K). Defensive copy with return gives **0% loss** (total isolation), but never mutates shared state — useless if you need shared progress. Pick your poison — or just synchronize.
+**Golden rule**: If multiple threads modify a collection, you need either an explicit lock (`synchronized`) or a concurrent data structure (`CopyOnWriteArrayList`, `ConcurrentHashMap`). Neither `final` nor defensive copies are sufficient. Defensive copy with write-back has a low collision rate but the **worst silent data loss** (35% at 100K). Defensive copy with return gives **0% collision** (total isolation), but never mutates shared state. Pick your poison — or just synchronize.
 
 ## Project Structure
 
